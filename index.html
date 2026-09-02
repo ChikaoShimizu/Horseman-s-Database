@@ -1,11 +1,649 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Homepage</title>
+    <title>UP Store Recommendation - อาชาบุรุษ</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        upPurple: '#5c2e91',
+                        upGold: '#f1c40f',
+                    },
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
 </head>
-<body>
-    Index
+<body class="text-slate-800">
+
+<div id="app" class="min-h-screen flex flex-col">
+    <!-- Navbar -->
+    <nav class="bg-upPurple text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center cursor-pointer" @click="navigate('home')">
+                    <i class="fa-solid fa-map-location-dot text-2xl mr-3 text-upGold"></i>
+                    <span class="font-bold text-xl tracking-wide">UP Shops</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="#" @click.prevent="navigate('home')" :class="{'text-upGold border-b-2 border-upGold': currentView === 'home'}" class="hover:text-upGold transition px-2 py-1">หน้าแรก</a>
+                    <a href="#" @click.prevent="navigate('owner')" :class="{'text-upGold border-b-2 border-upGold': currentView === 'owner'}" class="hover:text-upGold transition px-2 py-1">สำหรับเจ้าของร้าน</a>
+                    <a href="#" @click.prevent="navigate('admin')" :class="{'text-upGold border-b-2 border-upGold': currentView === 'admin'}" class="hover:text-upGold transition px-2 py-1">ผู้ดูแลระบบ</a>
+                    
+                    <div class="relative ml-4">
+                        <button @click="toggleLogin" class="bg-white text-upPurple px-4 py-2 rounded-full font-medium hover:bg-gray-100 transition shadow-sm flex items-center">
+                            <i class="fa-solid fa-user-circle mr-2"></i>
+                            {{ currentUser ? currentUser.name : 'เข้าสู่ระบบ' }}
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button class="text-white focus:outline-none">
+                        <i class="fa-solid fa-bars text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow">
+        <transition name="fade" mode="out-in">
+            
+            <!-- ================= VIEW: HOME (DISCOVER) ================= -->
+            <div v-if="currentView === 'home'" key="home" class="pb-12">
+                <!-- Hero Search Section -->
+                <div class="bg-upPurple text-white py-16 px-4 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-full opacity-10 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1555939594-58d7cb561ad1?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');"></div>
+                    <div class="max-w-3xl mx-auto text-center relative z-10">
+                        <h1 class="text-3xl md:text-5xl font-bold mb-4 text-white">ค้นหาร้านค้าและบริการหน้ามอ</h1>
+                        <p class="text-lg text-purple-200 mb-8">รวบรวมร้านอาหาร คาเฟ่ หอพัก และบริการต่างๆ รอบมหาวิทยาลัยพะเยา</p>
+                        
+                        <div class="bg-white rounded-full p-2 flex shadow-xl max-w-2xl mx-auto">
+                            <div class="flex-grow flex items-center pl-4 pr-2">
+                                <i class="fa-solid fa-search text-gray-400"></i>
+                                <input type="text" v-model="searchQuery" placeholder="พิมพ์ชื่อร้าน หรือหมวดหมู่ที่ต้องการ..." 
+                                       class="w-full py-3 px-4 text-gray-800 bg-transparent focus:outline-none">
+                            </div>
+                            <button class="bg-upGold hover:bg-yellow-500 text-upPurple font-bold rounded-full px-8 py-3 transition">
+                                ค้นหา
+                            </button>
+                        </div>
+                        
+                        <div class="mt-6 flex items-center justify-center space-x-2 text-white">
+                            <input type="checkbox" id="openNow" v-model="filterOpenNow" class="w-5 h-5 accent-upGold cursor-pointer rounded">
+                            <label for="openNow" class="cursor-pointer select-none font-medium text-lg">แสดงเฉพาะร้านที่เปิดอยู่ (Open Now)</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-10">
+                    <!-- Categories -->
+                    <div class="mb-12">
+                        <div class="flex justify-between items-end mb-6">
+                            <h2 class="text-2xl font-bold text-gray-800">หมวดหมู่แนะนำ</h2>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            <div v-for="cat in categories" :key="cat.id" 
+                                 @click="selectCategory(cat.name)"
+                                 :class="[searchCategory === cat.name ? 'ring-2 ring-upPurple bg-purple-50' : 'bg-white hover:shadow-md']"
+                                 class="rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition border border-gray-100 shadow-sm">
+                                <div class="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center text-upPurple text-2xl mb-3">
+                                    <i :class="cat.icon"></i>
+                                </div>
+                                <span class="font-medium text-gray-700">{{ cat.name }}</span>
+                            </div>
+                            <!-- Reset Category -->
+                            <div @click="selectCategory('')" v-if="searchCategory" class="rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition border border-gray-100 bg-gray-50 hover:bg-gray-100 shadow-sm">
+                                <div class="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-2xl mb-3">
+                                    <i class="fa-solid fa-times"></i>
+                                </div>
+                                <span class="font-medium text-gray-600">ล้างตัวกรอง</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shop List -->
+                    <div>
+                        <div class="flex justify-between items-end mb-6">
+                            <h2 class="text-2xl font-bold text-gray-800">
+                                {{ searchCategory ? `ร้านในหมวด "${searchCategory}"` : 'ร้านยอดนิยม 🔥' }}
+                            </h2>
+                            <span class="text-gray-500 text-sm">พบ {{ filteredShops.length }} ร้าน</span>
+                        </div>
+                        
+                        <div v-if="filteredShops.length === 0" class="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
+                            <i class="fa-solid fa-store-slash text-6xl text-gray-300 mb-4"></i>
+                            <h3 class="text-xl font-medium text-gray-600">ไม่พบร้านค้าที่ตรงกับเงื่อนไข</h3>
+                            <p class="text-gray-400 mt-2">ลองเปลี่ยนคำค้นหา หรือเอาตัวกรอง "เปิดอยู่" ออก</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div v-for="shop in filteredShops" :key="shop.id" 
+                                 class="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-shadow duration-300 border border-gray-100 overflow-hidden group cursor-pointer"
+                                 @click="viewShopDetail(shop)">
+                                <div class="h-48 overflow-hidden relative">
+                                    <img :src="shop.image" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                                    <div class="absolute top-3 left-3 flex gap-2">
+                                        <span class="bg-white px-3 py-1 rounded-full text-xs font-bold text-upPurple shadow-sm">
+                                            {{ shop.category }}
+                                        </span>
+                                    </div>
+                                    <div class="absolute top-3 right-3">
+                                        <span v-if="shop.isOpen" class="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm flex items-center">
+                                            <span class="w-2 h-2 bg-white rounded-full mr-1 animate-pulse"></span> เปิดอยู่
+                                        </span>
+                                        <span v-else class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">
+                                            ปิด
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="p-5">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h3 class="text-xl font-bold text-gray-800 line-clamp-1 group-hover:text-upPurple transition-colors">{{ shop.name }}</h3>
+                                        <div class="flex items-center bg-yellow-50 px-2 py-1 rounded border border-yellow-100">
+                                            <i class="fa-solid fa-star text-upGold text-sm mr-1"></i>
+                                            <span class="font-bold text-gray-800 text-sm">{{ shop.rating.toFixed(1) }}</span>
+                                        </div>
+                                    </div>
+                                    <p class="text-gray-500 text-sm mb-4 line-clamp-2"><i class="fa-solid fa-quote-left text-gray-300 mr-1"></i> {{ shop.description }}</p>
+                                    
+                                    <div class="flex items-center text-sm text-gray-500 mb-2">
+                                        <i class="fa-regular fa-clock w-5 text-center mr-1"></i>
+                                        <span>{{ shop.openTime }} - {{ shop.closeTime }} น.</span>
+                                    </div>
+                                    <div class="flex items-center text-sm text-gray-500">
+                                        <i class="fa-solid fa-location-dot w-5 text-center mr-1 text-red-400"></i>
+                                        <span class="truncate">{{ shop.distance }} จากหน้ามอ</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ================= VIEW: SHOP DETAIL ================= -->
+            <div v-else-if="currentView === 'detail'" key="detail" class="bg-gray-50 min-h-screen pb-12">
+                <!-- Cover Image -->
+                <div class="h-64 md:h-80 w-full relative">
+                    <img :src="selectedShop.image" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+                    
+                    <button @click="navigate('home')" class="absolute top-6 left-6 bg-white/20 hover:bg-white/40 backdrop-blur-md text-white rounded-full w-10 h-10 flex items-center justify-center transition">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                </div>
+                
+                <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20 relative z-10">
+                    <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-8">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-6 mb-6">
+                            <div>
+                                <div class="flex items-center gap-3 mb-2">
+                                    <span class="bg-purple-100 text-upPurple px-3 py-1 rounded-full text-xs font-bold">
+                                        {{ selectedShop.category }}
+                                    </span>
+                                    <span v-if="selectedShop.isOpen" class="text-green-600 text-sm font-bold flex items-center"><i class="fa-solid fa-circle text-[8px] mr-1"></i> กำลังเปิด</span>
+                                    <span v-else class="text-red-500 text-sm font-bold">ปิดอยู่</span>
+                                </div>
+                                <h1 class="text-3xl md:text-4xl font-bold text-gray-800">{{ selectedShop.name }}</h1>
+                            </div>
+                            
+                            <div class="flex flex-col items-end">
+                                <div class="text-3xl font-bold text-gray-800 flex items-center">
+                                    {{ selectedShop.rating.toFixed(1) }} <i class="fa-solid fa-star text-upGold ml-2 text-2xl"></i>
+                                </div>
+                                <span class="text-gray-500 text-sm mt-1">จาก {{ selectedShop.reviews.length }} รีวิว</span>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <!-- Info Column -->
+                            <div class="md:col-span-2 space-y-6">
+                                <div>
+                                    <h3 class="text-lg font-bold text-gray-800 mb-2">รายละเอียดร้าน</h3>
+                                    <p class="text-gray-600 leading-relaxed">{{ selectedShop.description }}</p>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                        <div class="flex items-start text-gray-700 mb-2">
+                                            <i class="fa-regular fa-clock mt-1 mr-3 text-upPurple"></i>
+                                            <div>
+                                                <div class="font-bold">เวลาเปิด-ปิด</div>
+                                                <div class="text-gray-600">{{ selectedShop.openTime }} - {{ selectedShop.closeTime }} น.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                        <div class="flex items-start text-gray-700">
+                                            <i class="fa-solid fa-money-bill-wave mt-1 mr-3 text-green-600"></i>
+                                            <div>
+                                                <div class="font-bold">ช่วงราคา</div>
+                                                <div class="text-gray-600">{{ selectedShop.priceRange }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Reviews Section -->
+                                <div class="pt-6 border-t border-gray-100">
+                                    <h3 class="text-xl font-bold text-gray-800 mb-4">รีวิวจากผู้ใช้งาน (Rating & Review)</h3>
+                                    
+                                    <!-- Add Review Form -->
+                                    <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6">
+                                        <div v-if="currentUser" class="space-y-4">
+                                            <h4 class="font-bold text-gray-700">เขียนรีวิวของคุณ</h4>
+                                            <div class="flex text-2xl text-gray-300 gap-1">
+                                                <i class="fa-solid fa-star cursor-pointer hover:text-upGold" v-for="n in 5" :key="n" :class="{'text-upGold': newReview.rating >= n}" @click="newReview.rating = n"></i>
+                                            </div>
+                                            <textarea v-model="newReview.comment" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-upPurple focus:ring-1 focus:ring-upPurple" rows="3" placeholder="แบ่งปันประสบการณ์ของคุณ..."></textarea>
+                                            <button @click="submitReview" class="bg-upPurple hover:bg-purple-800 text-white font-bold py-2 px-6 rounded-lg transition">ส่งรีวิว</button>
+                                        </div>
+                                        <div v-else class="text-center py-4">
+                                            <p class="text-gray-600 mb-3">กรุณาเข้าสู่ระบบก่อนเขียนรีวิว</p>
+                                            <button @click="toggleLogin" class="bg-white border border-upPurple text-upPurple font-bold py-2 px-6 rounded-lg hover:bg-purple-50 transition">เข้าสู่ระบบ</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Review List -->
+                                    <div class="space-y-4">
+                                        <div v-for="review in selectedShop.reviews" :key="review.id" class="border-b border-gray-100 pb-4 last:border-0">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-upPurple font-bold">
+                                                        {{ review.user.charAt(0) }}
+                                                    </div>
+                                                    <div>
+                                                        <div class="font-bold text-gray-800">{{ review.user }}</div>
+                                                        <div class="text-xs text-gray-500">{{ review.date }}</div>
+                                                    </div>
+                                                </div>
+                                                <div class="flex text-upGold text-sm">
+                                                    <i class="fa-solid fa-star" v-for="n in review.rating" :key="n"></i>
+                                                    <i class="fa-regular fa-star text-gray-300" v-for="n in 5 - review.rating" :key="'e'+n"></i>
+                                                </div>
+                                            </div>
+                                            <p class="text-gray-700 pl-13">{{ review.comment }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Sidebar (Map) -->
+                            <div class="space-y-6">
+                                <div class="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                                    <div class="p-4 bg-gray-100 border-b border-gray-200 font-bold text-gray-700 flex items-center">
+                                        <i class="fa-solid fa-map-location-dot mr-2 text-red-500"></i> แผนที่และการเดินทาง
+                                    </div>
+                                    <!-- Mock Map -->
+                                    <div class="h-48 bg-blue-100 relative w-full flex items-center justify-center">
+                                        <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" class="w-full h-full object-cover opacity-60 mix-blend-multiply">
+                                        <div class="absolute p-2 bg-white rounded-full shadow-lg text-red-500 animate-bounce">
+                                            <i class="fa-solid fa-location-dot text-2xl"></i>
+                                        </div>
+                                    </div>
+                                    <div class="p-4">
+                                        <p class="text-sm text-gray-600 mb-3"><i class="fa-solid fa-thumbtack text-gray-400 mr-2"></i> พิกัด: {{ selectedShop.lat }}, {{ selectedShop.lng }}</p>
+                                        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition flex justify-center items-center">
+                                            <i class="fa-solid fa-location-arrow mr-2"></i> นำทาง (Google Maps)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW: OWNER DASHBOARD ================= -->
+            <div v-else-if="currentView === 'owner'" key="owner" class="bg-gray-50 min-h-screen">
+                <div class="max-w-7xl mx-auto px-4 py-8">
+                    <div class="mb-8">
+                        <h1 class="text-3xl font-bold text-gray-800">Shop Owner Dashboard</h1>
+                        <p class="text-gray-500">จัดการข้อมูลร้านค้าของคุณ เพื่อการโปรโมทที่มีประสิทธิภาพ</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                        <!-- Sidebar -->
+                        <div class="lg:col-span-1 space-y-2">
+                            <button class="w-full text-left px-4 py-3 bg-upPurple text-white rounded-lg font-medium shadow-sm"><i class="fa-solid fa-shop mr-2"></i> โปรไฟล์ร้านค้า</button>
+                            <button class="w-full text-left px-4 py-3 bg-white text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition"><i class="fa-solid fa-chart-line mr-2"></i> สถิติการเข้าชม</button>
+                            <button class="w-full text-left px-4 py-3 bg-white text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition"><i class="fa-solid fa-star mr-2"></i> จัดการรีวิว</button>
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="lg:col-span-3">
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                                <h2 class="text-xl font-bold text-gray-800 mb-6 border-b pb-4">แก้ไขข้อมูลร้าน (Shop Profile Setup)</h2>
+                                
+                                <form @submit.prevent class="space-y-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อร้านค้า <span class="text-red-500">*</span></label>
+                                            <input type="text" value="ข้าวต้มรอบดึก หน้ามอ" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่ <span class="text-red-500">*</span></label>
+                                            <select class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
+                                                <option>อาหาร</option>
+                                                <option>คาเฟ่</option>
+                                                <option>ซักรีด</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">รายละเอียดร้าน / เมนูแนะนำ</label>
+                                        <textarea rows="4" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">ร้านข้าวต้มกุ๊ยเจ้าเก่า มีเมนูมากกว่า 50 อย่าง แนะนำ: ยำไข่เค็ม, แขนงหมูกรอบ, ซุปเปอร์ขาไก่ แซ่บถึงใจ</textarea>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">เวลาเปิด (Open Time)</label>
+                                            <input type="time" value="17:00" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">เวลาปิด (Close Time)</label>
+                                            <input type="time" value="02:00" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">รูปภาพหน้าร้าน</label>
+                                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-gray-50 transition cursor-pointer">
+                                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 mb-2"></i>
+                                            <p class="text-gray-500 text-sm">คลิกเพื่ออัปโหลดรูปภาพใหม่ (JPG, PNG)</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">พิกัดแผนที่ (ละติจูด, ลองจิจูด)</label>
+                                        <div class="flex gap-2">
+                                            <input type="text" value="19.0284" class="w-full p-2.5 border border-gray-300 rounded-lg bg-gray-50" readonly>
+                                            <input type="text" value="99.8941" class="w-full p-2.5 border border-gray-300 rounded-lg bg-gray-50" readonly>
+                                            <button class="bg-blue-600 text-white px-4 rounded-lg whitespace-nowrap hover:bg-blue-700">ปักหมุดใหม่</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="pt-4 border-t border-gray-200 flex justify-end">
+                                        <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-lg transition shadow-sm">บันทึกข้อมูล</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= VIEW: ADMIN DASHBOARD ================= -->
+            <div v-else-if="currentView === 'admin'" key="admin" class="bg-slate-100 min-h-screen">
+                <div class="max-w-7xl mx-auto px-4 py-8">
+                    <div class="flex justify-between items-end mb-8">
+                        <div>
+                            <h1 class="text-3xl font-bold text-slate-800">System Admin</h1>
+                            <p class="text-slate-500">ระบบจัดการศูนย์กลาง (Centralized Management)</p>
+                        </div>
+                        <div class="bg-white px-4 py-2 rounded-lg shadow-sm font-medium text-slate-600 border border-slate-200">
+                            <i class="fa-solid fa-shield-halved text-upPurple mr-2"></i> Admin: อาชาบุรุษ
+                        </div>
+                    </div>
+                    
+                    <!-- Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-blue-500">
+                            <div class="text-sm text-slate-500 mb-1">ร้านค้าในระบบทั้งหมด</div>
+                            <div class="text-2xl font-bold text-slate-800">124 ร้าน</div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-yellow-500">
+                            <div class="text-sm text-slate-500 mb-1">รอการอนุมัติ (Pending)</div>
+                            <div class="text-2xl font-bold text-slate-800">3 ร้าน</div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-green-500">
+                            <div class="text-sm text-slate-500 mb-1">ผู้ใช้งานระบบ</div>
+                            <div class="text-2xl font-bold text-slate-800">1,540 บัญชี</div>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-red-500">
+                            <div class="text-sm text-slate-500 mb-1">รีวิวที่ถูกรายงานสแปม</div>
+                            <div class="text-2xl font-bold text-slate-800">2 รายการ</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pending Approval Table -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+                        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <h2 class="font-bold text-slate-800"><i class="fa-solid fa-clipboard-check mr-2 text-slate-500"></i> รออนุมัติร้านค้าเปิดใหม่</h2>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 text-slate-500 text-sm border-b">
+                                        <th class="p-4 font-medium">ชื่อร้าน</th>
+                                        <th class="p-4 font-medium">หมวดหมู่</th>
+                                        <th class="p-4 font-medium">ผู้ขอเพิ่มข้อมูล</th>
+                                        <th class="p-4 font-medium">วันที่ขอ</th>
+                                        <th class="p-4 font-medium text-center">จัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm text-slate-700">
+                                    <tr class="border-b hover:bg-slate-50">
+                                        <td class="p-4 font-bold">ป้าศรี ตามสั่ง</td>
+                                        <td class="p-4"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">อาหาร</span></td>
+                                        <td class="p-4">สมหญิง รักดี (Owner)</td>
+                                        <td class="p-4">12 ต.ค. 2569</td>
+                                        <td class="p-4 text-center">
+                                            <button class="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1 rounded text-xs font-bold mr-2">อนุมัติ</button>
+                                            <button class="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 rounded text-xs font-bold">ปฏิเสธ</button>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b hover:bg-slate-50">
+                                        <td class="p-4 font-bold">หอพัก บ้านอุ่นใจ</td>
+                                        <td class="p-4"><span class="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">หอพัก</span></td>
+                                        <td class="p-4">มานะ อดทน (Owner)</td>
+                                        <td class="p-4">11 ต.ค. 2569</td>
+                                        <td class="p-4 text-center">
+                                            <button class="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1 rounded text-xs font-bold mr-2">อนุมัติ</button>
+                                            <button class="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 rounded text-xs font-bold">ปฏิเสธ</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </transition>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="bg-slate-800 text-slate-400 py-6 border-t border-slate-700 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-sm">
+            <p>Database System Project - กลุ่ม: อาชาบุรุษ</p>
+            <p class="mt-1">สาขาวิศวกรรมซอฟต์แวร์ คณะเทคโนโลยีสารสนเทศและการสื่อสาร มหาวิทยาลัยพะเยา</p>
+        </div>
+    </footer>
+</div>
+
+<script>
+    const { createApp, ref, computed, reactive, onMounted } = Vue
+
+    createApp({
+        setup() {
+            const currentView = ref('home');
+            const searchQuery = ref('');
+            const searchCategory = ref('');
+            const filterOpenNow = ref(false);
+            const currentUser = ref(null); // null = guest
+            const selectedShop = ref(null);
+            
+            const newReview = reactive({ rating: 0, comment: '' });
+
+            // ข้อมูลหมวดหมู่
+            const categories = ref([
+                { id: 1, name: 'อาหาร', icon: 'fa-solid fa-utensils' },
+                { id: 2, name: 'คาเฟ่', icon: 'fa-solid fa-mug-hot' },
+                { id: 3, name: 'ซักรีด', icon: 'fa-solid fa-tshirt' },
+                { id: 4, name: 'หอพัก', icon: 'fa-solid fa-building' },
+                { id: 5, name: 'ซ่อมรถ', icon: 'fa-solid fa-wrench' },
+            ]);
+
+            // ข้อมูลร้านค้าจำลอง (Seed Data)
+            const shops = ref([
+                { 
+                    id: 1, name: 'ข้าวต้มรอบดึก หน้ามอ', category: 'อาหาร', rating: 4.5, isOpen: true, 
+                    openTime: '17:00', closeTime: '02:00', priceRange: '฿50 - ฿150', distance: '300m',
+                    lat: '19.0284', lng: '99.8941',
+                    image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+                    description: 'ร้านข้าวต้มกุ๊ยเจ้าเก่า มีเมนูมากกว่า 50 อย่าง แนะนำ: ยำไข่เค็ม, แขนงหมูกรอบ, ซุปเปอร์ขาไก่ แซ่บถึงใจ เหมาะสำหรับนิสิตที่หิวตอนดึกๆ หลังจากทำกิจกรรมหรืออ่านหนังสือสอบ',
+                    reviews: [
+                        { id: 1, user: 'Nisit_65', rating: 5, comment: 'อร่อยมาก ให้เยอะ ราคาไม่แพง ยำไข่เค็มเด็ดสุดๆ', date: '2 วันที่แล้ว' },
+                        { id: 2, user: 'DekHor', rating: 4, comment: 'คนเยอะไปหน่อยตอนดึกๆ แต่อาหารได้ไว', date: '1 สัปดาห์ที่แล้ว' }
+                    ]
+                },
+                { 
+                    id: 2, name: 'Wash & Go ซักอบรีด', category: 'ซักรีด', rating: 4.8, isOpen: true,
+                    openTime: '08:00', closeTime: '22:00', priceRange: '฿40 - ฿100', distance: '150m',
+                    lat: '19.0290', lng: '99.8950',
+                    image: 'https://images.unsplash.com/photo-1545173168-9f1947eebb7f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+                    description: 'บริการซักอบรีดครบวงจร มีเครื่องอบแห้งขนาดใหญ่ แห้งไว หอมนาน ไม่ต้องกลัวฝนตก',
+                    reviews: [
+                        { id: 3, user: 'FreshyBoy', rating: 5, comment: 'ผ้าหอมมากครับ ป้าเจ้าของร้านใจดี', date: 'เมื่อวานนี้' }
+                    ]
+                },
+                { 
+                    id: 3, name: 'Sleepy Cat Cafe', category: 'คาเฟ่', rating: 4.2, isOpen: false,
+                    openTime: '10:00', closeTime: '18:00', priceRange: '฿60 - ฿120', distance: '500m',
+                    lat: '19.0270', lng: '99.8930',
+                    image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+                    description: 'คาเฟ่แมวสุดชิล มีน้องแมวให้เล่นกว่า 10 ตัว กาแฟอาราบิก้าแท้ 100% เหมาะสำหรับนั่งทำงานหรือผ่อนคลาย',
+                    reviews: [
+                        { id: 4, user: 'CatLover', rating: 4, comment: 'น้องแมวน่ารัก ชาเขียวอร่อยดีค่ะ', date: '3 สัปดาห์ที่แล้ว' }
+                    ]
+                },
+                { 
+                    id: 4, name: 'ช่างนพ ซ่อมมอเตอร์ไซค์', category: 'ซ่อมรถ', rating: 4.0, isOpen: true,
+                    openTime: '09:00', closeTime: '19:00', priceRange: 'ขึ้นอยู่กับอาการ', distance: '800m',
+                    lat: '19.0250', lng: '99.8910',
+                    image: 'https://images.unsplash.com/photo-1530046339160-ce3e530c7d2f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
+                    description: 'ปะยาง เปลี่ยนถ่ายน้ำมันเครื่อง ซ่อมเครื่องยนต์ ราคาเป็นกันเองสำหรับนิสิต',
+                    reviews: []
+                },
+            ]);
+
+            // ระบบค้นหาและกรอง (Business Logic & Filter)
+            const filteredShops = computed(() => {
+                return shops.value.filter(shop => {
+                    const matchText = shop.name.includes(searchQuery.value) || shop.category.includes(searchQuery.value);
+                    const matchCat = searchCategory.value === '' || shop.category === searchCategory.value;
+                    const matchStatus = filterOpenNow.value ? shop.isOpen : true;
+                    return matchText && matchCat && matchStatus;
+                });
+            });
+
+            // ฟังก์ชันเปลี่ยนหน้า
+            const navigate = (view) => {
+                currentView.value = view;
+                window.scrollTo(0,0);
+            };
+
+            const selectCategory = (catName) => {
+                searchCategory.value = catName;
+                searchQuery.value = '';
+            };
+
+            const viewShopDetail = (shop) => {
+                selectedShop.value = shop;
+                navigate('detail');
+            };
+
+            // จำลองการเข้าสู่ระบบ
+            const toggleLogin = () => {
+                if (currentUser.value) {
+                    currentUser.value = null; // Logout
+                } else {
+                    currentUser.value = { id: 99, name: 'สมชาย รักเรียน', role: 'user' }; // Login
+                }
+            };
+
+            // ระบบบันทึกรีวิว (Rating Update Logic)
+            const submitReview = () => {
+                if (newReview.rating === 0) {
+                    alert('กรุณาให้คะแนนดาวก่อนส่งรีวิว');
+                    return;
+                }
+                
+                // เพิ่มรีวิวใหม่ลงในร้านที่เลือก
+                selectedShop.value.reviews.unshift({
+                    id: Date.now(),
+                    user: currentUser.value.name,
+                    rating: newReview.rating,
+                    comment: newReview.comment || '-',
+                    date: 'เพิ่งรีวิว'
+                });
+
+                // คำนวณ Rating ใหม่
+                const totalRating = selectedShop.value.reviews.reduce((sum, rev) => sum + rev.rating, 0);
+                selectedShop.value.rating = totalRating / selectedShop.value.reviews.length;
+
+                // Reset ฟอร์ม
+                newReview.rating = 0;
+                newReview.comment = '';
+                alert('บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณครับ!');
+            };
+
+            return {
+                currentView,
+                searchQuery,
+                searchCategory,
+                filterOpenNow,
+                currentUser,
+                categories,
+                shops,
+                filteredShops,
+                selectedShop,
+                newReview,
+                navigate,
+                selectCategory,
+                viewShopDetail,
+                toggleLogin,
+                submitReview
+            }
+        }
+    }).mount('#app')
+</script>
+
 </body>
 </html>
