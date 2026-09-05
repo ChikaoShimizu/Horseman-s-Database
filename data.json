@@ -1,0 +1,79 @@
+{
+  "shops": [
+    {
+      "id": 1,
+      "name": "ข้าวต้มรอบดึก หน้ามอ",
+      "category": "อาหาร",
+      "rating": 4.5,
+      "isOpen": true,
+      "openTime": "17:00",
+      "closeTime": "02:00",
+      "priceRange": "฿50 - ฿150",
+      "distance": "300m",
+      "lat": "19.0284",
+      "lng": "99.8941",
+      "image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+      "description": "ร้านข้าวต้มกุ๊ยเจ้าเก่า มีเมนูมากกว่า 50 อย่าง แนะนำ: ยำไข่เค็ม, แขนงหมูกรอบ, ซุปเปอร์ขาไก่",
+      "reviews": [
+        { "id": 1, "user": "Nisit_65", "rating": 5, "comment": "อร่อยมาก", "date": "2 วันที่แล้ว" }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Wash & Go ซักอบรีด",
+      "category": "ซักรีด",
+      "rating": 4.8,
+      "isOpen": true,
+      "openTime": "08:00",
+      "closeTime": "22:00",
+      "priceRange": "฿40 - ฿100",
+      "distance": "150m",
+      "lat": "19.0290",
+      "lng": "99.8950",
+      "image": "https://images.unsplash.com/photo-1545173168-9f1947eebb7f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+      "description": "บริการซักอบรีดครบวงจร",
+      "reviews": []
+    },
+    {
+      "id": 3,
+      "name": "Sleepy Cat Cafe",
+      "category": "คาเฟ่",
+      "rating": 4.2,
+      "isOpen": false,
+      "openTime": "10:00",
+      "closeTime": "18:00",
+      "priceRange": "฿60 - ฿120",
+      "distance": "500m",
+      "lat": "19.0270",
+      "lng": "99.8930",
+      "image": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+      "description": "คาเฟ่แมวสุดชิล มีน้องแมวให้เล่นกว่า 10 ตัว กาแฟอาราบิก้าแท้ 100% เหมาะสำหรับนั่งทำงานหรือผ่อนคลาย",
+      "reviews": [
+        { "id": 4, "user": "CatLover", "rating": 4, "comment": "น้องแมวน่ารัก ชาเขียวอร่อยดีค่ะ", "date": "3 สัปดาห์ที่แล้ว" }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "ช่างนพ ซ่อมมอเตอร์ไซค์",
+      "category": "ซ่อมรถ",
+      "rating": 4.0,
+      "isOpen": true,
+      "openTime": "09:00",
+      "closeTime": "19:00",
+      "priceRange": "ขึ้นอยู่กับอาการ",
+      "distance": "800m",
+      "lat": "19.0250",
+      "lng": "99.8910",
+      "image": "https://images.unsplash.com/photo-1530046339160-ce3e530c7d2f?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+      "description": "ปะยาง เปลี่ยนถ่ายน้ำมันเครื่อง ซ่อมเครื่องยนต์ ราคาเป็นกันเองสำหรับนิสิต",
+      "reviews": []
+    }
+  ],
+  "categories": [
+    { "id": 1, "name": "อาหาร", "icon": "fa-solid fa-utensils" },
+    { "id": 2, "name": "คาเฟ่", "icon": "fa-solid fa-mug-hot" },
+    { "id": 3, "name": "ซักรีด", "icon": "fa-solid fa-tshirt" },
+    { "id": 4, "name": "หอพัก", "icon": "fa-solid fa-building" },
+    { "id": 5, "name": "ซ่อมรถ", "icon": "fa-solid fa-wrench" }
+  ]
+}
