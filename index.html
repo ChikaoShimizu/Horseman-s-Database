@@ -562,12 +562,17 @@
                 navigate('detail');
             };
 
-            // จำลองการเข้าสู่ระบบ
+            // ฟังก์ชันจัดการปุ่มเข้าสู่ระบบ / ออกจากระบบ
             const toggleLogin = () => {
                 if (currentUser.value) {
-                    currentUser.value = null; // Logout
+                    // กรณีที่ล็อกอินอยู่แล้วกดปุ่ม -> ให้ออกจากระบบ (Logout)
+                    currentUser.value = null;
+                    localStorage.removeItem('isLoggedIn');
+                    localStorage.removeItem('userEmail');
+                    alert('ออกจากระบบเรียบร้อยแล้ว');
                 } else {
-                    currentUser.value = { id: 99, name: 'สมชาย รักเรียน', role: 'user' }; // Login
+                    // กรณีที่ยังไม่ล็อกอิน -> ให้เปลี่ยนไปหน้า login.html
+                    window.location.href = 'login.html';
                 }
             };
 
