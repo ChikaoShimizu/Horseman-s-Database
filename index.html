@@ -51,20 +51,46 @@
     <nav class="bg-upPurple text-white shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
+                <!-- โลโก้ / หน้าแรก -->
                 <div class="flex items-center cursor-pointer" @click="navigate('home')">
                     <i class="fa-solid fa-map-location-dot text-2xl mr-3 text-upGold"></i>
                     <span class="font-bold text-xl tracking-wide">UP Shops</span>
                 </div>
-                <div class="hidden md:flex items-center space-x-6">
-                    <a href="#" @click.prevent="navigate('home')" :class="{'text-upGold border-b-2 border-upGold': currentView === 'home'}" class="hover:text-upGold transition px-2 py-1">หน้าแรก</a>
-                    <a href="#" @click.prevent="navigate('owner')" :class="{'text-upGold border-b-2 border-upGold': currentView === 'owner'}" class="hover:text-upGold transition px-2 py-1">สำหรับเจ้าของร้าน</a>
-                    <a href="#" @click.prevent="navigate('admin')" :class="{'text-upGold border-b-2 border-upGold': currentView === 'admin'}" class="hover:text-upGold transition px-2 py-1">ผู้ดูแลระบบ</a>
+                
+                <!-- เมนูด้านขวา -->
+                <div class="hidden md:flex items-center space-x-4">
+                    <a href="#" @click.prevent="navigate('home')" :class="{'text-upGold': currentView === 'home'}" class="hover:text-upGold transition px-2 font-medium">หน้าแรก</a>
                     
-                    <div class="relative ml-4">
-                        <button @click="toggleLogin" class="bg-white text-upPurple px-4 py-2 rounded-full font-medium hover:bg-gray-100 transition shadow-sm flex items-center">
-                            <i class="fa-solid fa-user-circle mr-2"></i>
-                            {{ currentUser ? currentUser.name : 'เข้าสู่ระบบ' }}
-                        </button>
+                    <div class="relative ml-2 flex gap-2 items-center">
+                        <!-- กรณีที่ยังไม่ล็อกอิน -->
+                        <template v-if="!currentUser">
+                            <a href="Register.html" class="text-white hover:text-upGold transition px-3 font-medium">สมัครสมาชิก</a>
+                            <button @click="toggleLogin" class="bg-white text-upPurple px-4 py-2 rounded-full font-medium hover:bg-gray-100 transition shadow-sm">
+                                เข้าสู่ระบบ
+                            </button>
+                        </template>
+                        
+                        <!-- กรณีที่ล็อกอินแล้ว -->
+                        <template v-else>
+                            <!-- ปุ่มพิเศษสำหรับ Owner -->
+                            <a v-if="currentUser.role === 'owner'" href="ownerpf.html" class="bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-yellow-200 transition mr-2">
+                                <i class="fa-solid fa-store mr-1"></i> จัดการร้านค้า
+                            </a>
+
+                            <!-- ปุ่มพิเศษสำหรับ Admin -->
+                            <button v-if="currentUser.role === 'admin'" @click="navigate('admin')" class="bg-red-100 text-red-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-red-200 transition mr-2">
+                                <i class="fa-solid fa-shield-halved mr-1"></i> หลังบ้าน (Admin)
+                            </button>
+
+                            <!-- ชื่อผู้ใช้และปุ่มออก -->
+                            <div class="flex items-center bg-purple-800 px-4 py-2 rounded-full shadow-sm border border-purple-700">
+                                <i class="fa-solid fa-user-circle mr-2 text-upGold"></i>
+                                <span class="font-medium text-sm">{{ currentUser.name }}</span>
+                                <button @click="logout" class="ml-3 pl-3 border-l border-purple-600 text-purple-300 hover:text-white transition text-sm" title="ออกจากระบบ">
+                                    <i class="fa-solid fa-sign-out-alt"></i>
+                                </button>
+                            </div>
+                        </template>
                     </div>
                 </div>
                 
@@ -328,86 +354,6 @@
                 </div>
             </div>
 
-            <!-- ================= VIEW: OWNER DASHBOARD ================= -->
-            <div v-else-if="currentView === 'owner'" key="owner" class="bg-gray-50 min-h-screen">
-                <div class="max-w-7xl mx-auto px-4 py-8">
-                    <div class="mb-8">
-                        <h1 class="text-3xl font-bold text-gray-800">Shop Owner Dashboard</h1>
-                        <p class="text-gray-500">จัดการข้อมูลร้านค้าของคุณ เพื่อการโปรโมทที่มีประสิทธิภาพ</p>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                        <!-- Sidebar -->
-                        <div class="lg:col-span-1 space-y-2">
-                            <button class="w-full text-left px-4 py-3 bg-upPurple text-white rounded-lg font-medium shadow-sm"><i class="fa-solid fa-shop mr-2"></i> โปรไฟล์ร้านค้า</button>
-                            <button class="w-full text-left px-4 py-3 bg-white text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition"><i class="fa-solid fa-chart-line mr-2"></i> สถิติการเข้าชม</button>
-                            <button class="w-full text-left px-4 py-3 bg-white text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition"><i class="fa-solid fa-star mr-2"></i> จัดการรีวิว</button>
-                        </div>
-                        
-                        <!-- Content -->
-                        <div class="lg:col-span-3">
-                            <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                                <h2 class="text-xl font-bold text-gray-800 mb-6 border-b pb-4">แก้ไขข้อมูลร้าน (Shop Profile Setup)</h2>
-                                
-                                <form @submit.prevent class="space-y-6">
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อร้านค้า <span class="text-red-500">*</span></label>
-                                            <input type="text" value="ข้าวต้มรอบดึก หน้ามอ" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่ <span class="text-red-500">*</span></label>
-                                            <select class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
-                                                <option>อาหาร</option>
-                                                <option>คาเฟ่</option>
-                                                <option>ซักรีด</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">รายละเอียดร้าน / เมนูแนะนำ</label>
-                                        <textarea rows="4" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">ร้านข้าวต้มกุ๊ยเจ้าเก่า มีเมนูมากกว่า 50 อย่าง แนะนำ: ยำไข่เค็ม, แขนงหมูกรอบ, ซุปเปอร์ขาไก่ แซ่บถึงใจ</textarea>
-                                    </div>
-                                    
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">เวลาเปิด (Open Time)</label>
-                                            <input type="time" value="17:00" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">เวลาปิด (Close Time)</label>
-                                            <input type="time" value="02:00" class="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-upPurple focus:border-upPurple">
-                                        </div>
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">รูปภาพหน้าร้าน</label>
-                                        <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-gray-50 transition cursor-pointer">
-                                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 mb-2"></i>
-                                            <p class="text-gray-500 text-sm">คลิกเพื่ออัปโหลดรูปภาพใหม่ (JPG, PNG)</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">พิกัดแผนที่ (ละติจูด, ลองจิจูด)</label>
-                                        <div class="flex gap-2">
-                                            <input type="text" value="19.0284" class="w-full p-2.5 border border-gray-300 rounded-lg bg-gray-50" readonly>
-                                            <input type="text" value="99.8941" class="w-full p-2.5 border border-gray-300 rounded-lg bg-gray-50" readonly>
-                                            <button class="bg-blue-600 text-white px-4 rounded-lg whitespace-nowrap hover:bg-blue-700">ปักหมุดใหม่</button>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="pt-4 border-t border-gray-200 flex justify-end">
-                                        <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-lg transition shadow-sm">บันทึกข้อมูล</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ================= VIEW: ADMIN DASHBOARD ================= -->
             <div v-else-if="currentView === 'admin'" key="admin" class="bg-slate-100 min-h-screen">
                 <div class="max-w-7xl mx-auto px-4 py-8">
@@ -468,16 +414,6 @@
                                             <button class="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 rounded text-xs font-bold">ปฏิเสธ</button>
                                         </td>
                                     </tr>
-                                    <tr class="border-b hover:bg-slate-50">
-                                        <td class="p-4 font-bold">หอพัก บ้านอุ่นใจ</td>
-                                        <td class="p-4"><span class="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">หอพัก</span></td>
-                                        <td class="p-4">มานะ อดทน (Owner)</td>
-                                        <td class="p-4">11 ต.ค. 2569</td>
-                                        <td class="p-4 text-center">
-                                            <button class="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1 rounded text-xs font-bold mr-2">อนุมัติ</button>
-                                            <button class="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 rounded text-xs font-bold">ปฏิเสธ</button>
-                                        </td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -502,7 +438,6 @@
 
     createApp({
         setup() {
-            // ประกาศตัวแปรเปล่าๆ ไว้ก่อน
             const currentView = ref('home');
             const searchQuery = ref('');
             const searchCategory = ref('');
@@ -511,26 +446,16 @@
             const selectedShop = ref(null);
             const newReview = reactive({ rating: 0, comment: '' });
 
-            // เตรียมตัวแปรมารับข้อมูล (แทนที่การ Hardcode)
             const categories = ref([]);
             const shops = ref([]);
-            const isLoading = ref(true); // ตัวแปรเช็คสถานะการโหลดข้อมูล
+            const isLoading = ref(true); 
 
-            // ฟังก์ชันสำหรับดึงข้อมูล (Fetch)
             const loadData = async () => {
                 try {
                     isLoading.value = true;
-                    // ดึงไฟล์ data.json
                     const response = await fetch('./data.json');
-                    
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    
-                    // แปลงข้อความที่ได้มาเป็น JSON
+                    if (!response.ok) throw new Error('Network response was not ok');
                     const data = await response.json();
-                    
-                    // นำข้อมูลยัดใส่ตัวแปร
                     shops.value = data.shops;
                     categories.value = data.categories;
                 } catch (error) {
@@ -541,12 +466,30 @@
                 }
             };
 
-            // ใช้ onMounted เพื่อสั่งให้ทำงานตอนที่เว็บโหลดเสร็จ
             onMounted(() => {
                 loadData();
+                
+                // ตรวจสอบสถานะการล็อกอินและจำลองสิทธิ์ (Role)
+                if(localStorage.getItem('isLoggedIn') === 'true') {
+                    const email = localStorage.getItem('userEmail');
+                    
+                    // กำหนดสิทธิ์เริ่มต้นเป็นผู้ใช้ทั่วไป
+                    let role = 'user';
+                    let name = 'ผู้ใช้งานทั่วไป';
+                    
+                    // จำลองการแยก Role ตาม Email เพื่อการนำเสนองาน
+                    if(email === 'admin@up.ac.th') {
+                        role = 'admin';
+                        name = 'Admin อาชาบุรุษ';
+                    } else if(email === 'owner@up.ac.th') {
+                        role = 'owner';
+                        name = 'เจ้าของร้านค้า';
+                    }
+                    
+                    currentUser.value = { name: name, email: email, role: role };
+                }
             });
 
-            // ฟังก์ชันเปลี่ยนหน้า
             const navigate = (view) => {
                 currentView.value = view;
                 window.scrollTo(0,0);
@@ -562,28 +505,24 @@
                 navigate('detail');
             };
 
-            // ฟังก์ชันจัดการปุ่มเข้าสู่ระบบ / ออกจากระบบ
             const toggleLogin = () => {
-                if (currentUser.value) {
-                    // กรณีที่ล็อกอินอยู่แล้วกดปุ่ม -> ให้ออกจากระบบ (Logout)
-                    currentUser.value = null;
-                    localStorage.removeItem('isLoggedIn');
-                    localStorage.removeItem('userEmail');
-                    alert('ออกจากระบบเรียบร้อยแล้ว');
-                } else {
-                    // กรณีที่ยังไม่ล็อกอิน -> ให้เปลี่ยนไปหน้า login.html
-                    window.location.href = 'login.html';
-                }
+                window.location.href = 'login.html';
             };
 
-            // ระบบบันทึกรีวิว (Rating Update Logic)
+            const logout = () => {
+                currentUser.value = null;
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('userEmail');
+                navigate('home'); // กลับไปหน้าแรกเสมอเพื่อความปลอดภัย
+                alert('ออกจากระบบเรียบร้อยแล้ว');
+            };
+
             const submitReview = () => {
                 if (newReview.rating === 0) {
                     alert('กรุณาให้คะแนนดาวก่อนส่งรีวิว');
                     return;
                 }
                 
-                // เพิ่มรีวิวใหม่ลงในร้านที่เลือก
                 selectedShop.value.reviews.unshift({
                     id: Date.now(),
                     user: currentUser.value.name,
@@ -592,11 +531,9 @@
                     date: 'เพิ่งรีวิว'
                 });
 
-                // คำนวณ Rating ใหม่
                 const totalRating = selectedShop.value.reviews.reduce((sum, rev) => sum + rev.rating, 0);
                 selectedShop.value.rating = totalRating / selectedShop.value.reviews.length;
 
-                // Reset ฟอร์ม
                 newReview.rating = 0;
                 newReview.comment = '';
                 alert('บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณครับ!');
@@ -623,12 +560,11 @@
                 selectedShop,
                 newReview,
                 isLoading,
-                shops,
-                categories,
                 navigate,
                 selectCategory,
                 viewShopDetail,
                 toggleLogin,
+                logout,
                 submitReview
             }
         }
