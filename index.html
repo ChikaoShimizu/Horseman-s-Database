@@ -59,7 +59,9 @@
                 
                 <!-- เมนูด้านขวา -->
                 <div class="hidden md:flex items-center space-x-4">
-                    <a href="#" @click.prevent="navigate('home')" :class="{'text-upGold': currentView === 'home'}" class="hover:text-upGold transition px-2 font-medium">หน้าแรก</a>
+                    <a v-if="currentUser && currentUser.role === 'owner'" href="ownerpf.html" class="hover:text-upGold transition px-2 py-1 text-white">
+                    จัดการร้านค้าของฉัน
+                    </a>
                     
                     <div class="relative ml-2 flex gap-2 items-center">
                         <!-- กรณีที่ยังไม่ล็อกอิน -->
@@ -467,26 +469,23 @@
             };
 
             onMounted(() => {
-                loadData();
-                
-                // ตรวจสอบสถานะการล็อกอินและจำลองสิทธิ์ (Role)
-                if(localStorage.getItem('isLoggedIn') === 'true') {
-                    const email = localStorage.getItem('userEmail');
-                    
-                    // กำหนดสิทธิ์เริ่มต้นเป็นผู้ใช้ทั่วไป
-                    let role = 'user';
-                    let name = 'ผู้ใช้งานทั่วไป';
-                    
-                    // จำลองการแยก Role ตาม Email เพื่อการนำเสนองาน
-                    if(email === 'admin@up.ac.th') {
-                        role = 'admin';
-                        name = 'Admin อาชาบุรุษ';
-                    } else if(email === 'owner@up.ac.th') {
-                        role = 'owner';
-                        name = 'เจ้าของร้านค้า';
-                    }
-                    
-                    currentUser.value = { name: name, email: email, role: role };
+            // 1. ต้องมีบรรทัดนี้ เพื่อให้ไปโหลดข้อมูลร้านค้าจากไฟล์ JSON มาแสดง
+                 loadData(); 
+
+            // 2. ส่วนตรวจสอบสถานะการล็อกอินและ Role
+            const isLoggedIn = localStorage.getItem('isLoggedIn');
+                if (isLoggedIn === 'true') {
+                    const userEmail = localStorage.getItem('userEmail');
+                    const displayName = userEmail ? userEmail.split('@')[0] : 'User';
+        
+                    // ดึง role ออกมา ถ้าไม่มีให้ถือว่าเป็น 'user' ทั่วไป
+                    const savedRole = localStorage.getItem('userRole') || 'user';
+        
+                    currentUser.value = { 
+                        id: 99, 
+                        name: displayName, 
+                        role: savedRole
+                    };
                 }
             });
 

@@ -82,6 +82,7 @@
 
                     // 3. (Optional) คุณสามารถเพิ่มการตรวจสอบความถูกต้องของอีเมลหรือรหัสผ่านจำลองตรงนี้ได้
                     // ตัวอย่าง: ถ้าอยากให้ล็อกอินได้เฉพาะอีเมล test@test.com
+                    
                     /*
                     if (email.value !== 'test@test.com' || password.value !== '1234') {
                         errorMessage.value = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
@@ -91,10 +92,18 @@
 
                     // ถ้่าข้อมูลครบถ้วน ให้เปลี่ยนหน้าไปยัง index.html
                     // สามารถบันทึกสถานะการล็อกอินลง localStorage ได้ (เพื่อให้หน้า index.html รู้ว่าล็อกอินแล้ว)
+                    // ... (เช็คอีเมลรหัสผ่านผ่านแล้ว)
                     localStorage.setItem('isLoggedIn', 'true');
                     localStorage.setItem('userEmail', email.value);
 
-                    window.location.href = 'index.html';
+                    // จำลอง Role: ถ้าอีเมลมีคำว่า owner ให้เป็นเจ้าของร้าน ถ้าไม่ใช่เป็นแค่ user
+                    if (email.value.includes('owner')) {
+                        localStorage.setItem('userRole', 'owner');
+                    } else {
+                        localStorage.setItem('userRole', 'user');
+                    }
+
+                        window.location.href = 'index.html';
                 };
 
                 return {

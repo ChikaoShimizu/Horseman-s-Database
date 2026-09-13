@@ -1,11 +1,229 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Owner Profile</title>
+    <title>จัดการร้านค้า - UP Shops</title>
+    
+    <!-- โหลด Tailwind CSS & Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- โหลด Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>body { font-family: 'Prompt', sans-serif; }</style>
 </head>
-<body>
-    Owner Profile
+<body class="bg-slate-50 min-h-screen pb-12">
+
+<div id="app">
+    <!-- Navbar (แบบย่อสำหรับหน้าจัดการ) -->
+    <nav class="bg-[#5c2e91] text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center font-bold text-lg">
+                <i class="fa-solid fa-shop mr-2 text-[#f1c40f]"></i>
+                ระบบจัดการโปรไฟล์ร้านค้า
+            </div>
+            <a href="index.html" class="text-white hover:text-gray-200 transition">
+                <i class="fa-solid fa-arrow-left mr-1"></i> กลับหน้าหลัก
+            </a>
+        </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto px-4 mt-8">
+        
+        <!-- กล่องแสดงข้อความ Error (Edge Cases) -->
+        <div v-if="errorMessage" class="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-r-lg shadow-sm flex items-start">
+            <i class="fa-solid fa-triangle-exclamation mt-1 mr-3 text-lg"></i>
+            <div>
+                <h3 class="font-bold">พบข้อผิดพลาด</h3>
+                <p class="text-sm">{{ errorMessage }}</p>
+            </div>
+        </div>
+
+        <!-- กล่องแสดงข้อความสำเร็จ (Happy Path) -->
+        <div v-if="successMessage" class="mb-6 p-4 bg-green-100 border-l-4 border-green-500 text-green-700 rounded-r-lg shadow-sm flex items-start">
+            <i class="fa-solid fa-circle-check mt-1 mr-3 text-lg"></i>
+            <div>
+                <h3 class="font-bold">สำเร็จ!</h3>
+                <p class="text-sm">{{ successMessage }}</p>
+            </div>
+        </div>
+
+        <form @submit.prevent="saveShopProfile" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            
+            <!-- ส่วนที่ 1: ข้อมูลพื้นฐาน (User Story 2.1) -->
+            <div class="p-6 md:p-8 border-b border-slate-200">
+                <h2 class="text-xl font-bold text-slate-800 mb-6 flex items-center">
+                    <span class="bg-purple-100 text-[#5c2e91] w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span>
+                    ข้อมูลพื้นฐาน
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อร้านค้า <span class="text-red-500">*</span></label>
+                        <input v-model="shop.name" type="text" placeholder="เช่น ป้าศรี ตามสั่ง" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">หมวดหมู่ <span class="text-red-500">*</span></label>
+                        <select v-model="shop.category" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none">
+                            <option value="" disabled>-- เลือกหมวดหมู่ --</option>
+                            <option value="อาหาร">อาหาร</option>
+                            <option value="คาเฟ่">คาเฟ่</option>
+                            <option value="ซักรีด">ซักรีด</option>
+                            <option value="หอพัก">หอพัก</option>
+                            <option value="ซ่อมรถ">ซ่อมรถ</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">คำอธิบายร้าน / เมนูแนะนำ</label>
+                    <textarea v-model="shop.description" rows="3" placeholder="อธิบายจุดเด่นของร้าน..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">เวลาเปิด <span class="text-red-500">*</span></label>
+                        <input v-model="shop.openTime" type="time" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">เวลาปิด <span class="text-red-500">*</span></label>
+                        <input v-model="shop.closeTime" type="time" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ส่วนที่ 2: พิกัดแผนที่ (User Story 2.2) -->
+            <div class="p-6 md:p-8 bg-slate-50">
+                <h2 class="text-xl font-bold text-slate-800 mb-6 flex items-center">
+                    <span class="bg-purple-100 text-[#5c2e91] w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span>
+                    ตำแหน่งที่ตั้ง (ปักหมุด)
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- จำลองแผนที่ -->
+                    <div class="md:col-span-2 relative bg-blue-100 border-2 border-slate-300 border-dashed rounded-xl h-64 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 transition" @click="mockMapPin">
+                        <img v-if="shop.lat" src="https://images.unsplash.com/photo-1524661135-423995f22d0b?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" class="absolute inset-0 w-full h-full object-cover opacity-50 rounded-xl mix-blend-multiply">
+                        <i class="fa-solid fa-map-location-dot text-4xl text-slate-400 mb-2 relative z-10" :class="{'text-red-500': shop.lat}"></i>
+                        <p class="text-slate-600 font-medium relative z-10">{{ shop.lat ? 'คลิกเพื่อเปลี่ยนตำแหน่ง' : 'คลิกบนแผนที่เพื่อปักหมุด' }}</p>
+                        
+                        <!-- จุดปักหมุดจำลอง -->
+                        <div v-if="shop.lat" class="absolute z-20 text-red-600 text-3xl animate-bounce" style="top: 40%; left: 50%; transform: translate(-50%, -50%);">
+                            <i class="fa-solid fa-location-dot shadow-sm"></i>
+                        </div>
+                    </div>
+
+                    <!-- ค่าพิกัด -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">ละติจูด (Latitude)</label>
+                            <input v-model="shop.lat" type="text" readonly placeholder="ยังไม่ได้ปักหมุด" class="w-full p-3 bg-slate-100 border border-slate-300 rounded-lg text-slate-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">ลองจิจูด (Longitude)</label>
+                            <input v-model="shop.lng" type="text" readonly placeholder="ยังไม่ได้ปักหมุด" class="w-full p-3 bg-slate-100 border border-slate-300 rounded-lg text-slate-500">
+                        </div>
+                        <div class="text-xs text-slate-500 mt-2">
+                            <i class="fa-solid fa-circle-info mr-1"></i> หากปักหมุดไม่ได้ สามารถกรอกตัวเลขด้วยตนเองได้
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ปุ่ม Submit -->
+            <div class="p-6 border-t border-slate-200 bg-white flex justify-end">
+                <button type="submit" class="bg-[#5c2e91] hover:bg-purple-800 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 flex items-center">
+                    <i class="fa-solid fa-save mr-2"></i> บันทึกข้อมูลร้านค้า
+                </button>
+            </div>
+            
+        </form>
+    </main>
+</div>
+
+<script>
+    const { createApp, reactive, ref } = Vue;
+
+    createApp({
+        setup() {
+            // สร้างตัวแปรเก็บข้อมูลฟอร์ม
+            const shop = reactive({
+                name: '',
+                category: '',
+                description: '',
+                openTime: '',
+                closeTime: '',
+                lat: '',
+                lng: ''
+            });
+
+            const errorMessage = ref('');
+            const successMessage = ref('');
+
+            // ฟังก์ชันจำลองการจิ้มแผนที่เพื่อได้พิกัด (สุ่มพิกัดแถว ม.พะเยา)
+            const mockMapPin = () => {
+                // พิกัดสุ่มรอบๆ ม.พะเยา
+                const baseLat = 19.028;
+                const baseLng = 99.894;
+                shop.lat = (baseLat + (Math.random() * 0.01 - 0.005)).toFixed(5);
+                shop.lng = (baseLng + (Math.random() * 0.01 - 0.005)).toFixed(5);
+                
+                errorMessage.value = ''; // เคลียร์ error ถ้ามี
+            };
+
+            // ฟังก์ชันตรวจสอบและบันทึกข้อมูล
+            const saveShopProfile = () => {
+                errorMessage.value = '';
+                successMessage.value = '';
+
+                // --- เริ่มตรวจจับ Edge Cases ---
+                
+                // 1. ตรวจสอบว่ากรอกข้อมูลจำเป็นครบไหม (Happy Path ของข้อ 2.1)
+                if (!shop.name || !shop.category || !shop.openTime || !shop.closeTime) {
+                    errorMessage.value = 'กรุณากรอกข้อมูลที่มีเครื่องหมายดอกจัน (*) ให้ครบถ้วน';
+                    window.scrollTo(0, 0); // เลื่อนจอขึ้นไปดู Error
+                    return;
+                }
+
+                // 2. ตรวจสอบเวลา (Edge Case: ลืมตั้งเวลาปิด หรือ กรอกเวลาผิดพลาด)
+                if (shop.openTime === shop.closeTime) {
+                    errorMessage.value = 'เวลาเปิดและเวลาปิดร้านต้องไม่เป็นเวลาเดียวกัน';
+                    window.scrollTo(0, 0);
+                    return;
+                }
+
+                // 3. ตรวจสอบการปักหมุดแผนที่ (Edge Case ของข้อ 2.2)
+                if (!shop.lat || !shop.lng) {
+                    errorMessage.value = 'กรุณาคลิกบนแผนที่เพื่อปักหมุดที่ตั้งของร้านคุณ';
+                    window.scrollTo(0, 0);
+                    return;
+                }
+
+                // --- จบการตรวจจับ Edge Cases ---
+
+                // หากผ่านทุกเงื่อนไข (Happy Path)
+                successMessage.value = `บันทึกข้อมูลร้าน "${shop.name}" เรียบร้อยแล้ว!`;
+                
+                // จำลองการหน่วงเวลาแล้วพาไปหน้าหลัก
+                setTimeout(() => {
+                    // สามารถใช้ localStorage เพื่อส่งข้อมูลไปโชว์ในหน้า index ได้
+                    alert('ข้อมูลถูกจำลองส่งไปยังระบบส่วนกลางแล้ว');
+                    // window.location.href = 'index.html'; 
+                }, 2000);
+            };
+
+            return {
+                shop,
+                errorMessage,
+                successMessage,
+                mockMapPin,
+                saveShopProfile
+            }
+        }
+    }).mount('#app');
+</script>
+
 </body>
 </html>
