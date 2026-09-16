@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบผู้ดูแล - UP Shops</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { 
+                extend: { 
+                    colors: { 
+                        upPurple: '#5c2e91', 
+                        upGold: '#f1c40f' 
+                    }, 
+                    fontFamily: { 
+                        sans: ['Prompt', 'sans-serif'] 
+                    } 
+                } 
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; }
+        
+        /* Custom Scrollbar ให้เหมือน index.html */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="text-slate-800">
+
+<div id="app" class="min-h-screen flex flex-col">
+    <!-- Navbar (ปรับใช้โทนสี upPurple และ upGold แบบเดียวกับหน้าแรก) -->
+    <nav class="bg-upPurple text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between h-16 items-center">
+            <a href="index.html" class="flex items-center cursor-pointer">
+                <i class="fa-solid fa-shield-halved text-2xl mr-3 text-upGold"></i>
+                <span class="font-bold text-xl tracking-wide">UP Shops (Admin Panel)</span>
+            </a>
+            <button @click="logout" class="bg-white text-red-600 px-4 py-2 rounded-full font-medium hover:bg-red-50 transition shadow-sm text-sm flex items-center">
+                <i class="fa-solid fa-sign-out-alt mr-2"></i> ออกจากระบบ
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full mt-4">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800">System Admin</h1>
+                <p class="text-slate-500">ระบบจัดการศูนย์กลาง (Centralized Management)</p>
+            </div>
+            <div class="bg-white px-4 py-2 rounded-lg shadow-sm font-medium text-slate-600 border border-slate-200">
+                <i class="fa-solid fa-user-shield text-upPurple mr-2"></i> Admin: อาชาบุรุษ
+            </div>
+        </div>
+        
+        <!-- Stats Dashboard -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-blue-500">
+                <div class="text-sm text-slate-500 mb-1">ร้านค้าในระบบทั้งหมด</div>
+                <div class="text-2xl font-bold text-slate-800">{{ stats.totalShops }} ร้าน</div>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-yellow-500">
+                <div class="text-sm text-slate-500 mb-1">รอการอนุมัติ (Pending)</div>
+                <div class="text-2xl font-bold text-slate-800">{{ pendingShops.length }} ร้าน</div>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-green-500">
+                <div class="text-sm text-slate-500 mb-1">ผู้ใช้งานระบบ</div>
+                <div class="text-2xl font-bold text-slate-800">{{ stats.totalUsers }} บัญชี</div>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-red-500">
+                <div class="text-sm text-slate-500 mb-1">รีวิวที่ถูกรายงานสแปม</div>
+                <div class="text-2xl font-bold text-slate-800">{{ stats.spamReviews }} รายการ</div>
+            </div>
+        </div>
+        
+        <!-- Pending Approval Table -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                <h2 class="font-bold text-slate-800"><i class="fa-solid fa-clipboard-check mr-2 text-slate-500"></i> รออนุมัติร้านค้าเปิดใหม่</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-sm border-b">
+                            <th class="p-4 font-medium">ชื่อร้าน</th>
+                            <th class="p-4 font-medium">หมวดหมู่</th>
+                            <th class="p-4 font-medium">ผู้ขอเพิ่มข้อมูล</th>
+                            <th class="p-4 font-medium">วันที่ขอ</th>
+                            <th class="p-4 font-medium text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm text-slate-700">
+                        <!-- กรณีไม่มีคำขอ -->
+                        <tr v-if="pendingShops.length === 0">
+                            <td colspan="5" class="p-8 text-center text-slate-400">
+                                <i class="fa-solid fa-check-circle text-4xl mb-2 text-green-400 block"></i>
+                                ไม่มีคำขอเปิดร้านใหม่ในขณะนี้
+                            </td>
+                        </tr>
+                        <!-- กรณีมีคำขอ (ใช้ v-for วนลูปข้อมูลจำลอง) -->
+                        <tr v-for="shop in pendingShops" :key="shop.id" class="border-b hover:bg-slate-50 transition">
+                            <td class="p-4 font-bold text-slate-800">{{ shop.name }}</td>
+                            <td class="p-4">
+                                <span class="bg-purple-100 text-upPurple px-2 py-1 rounded text-xs font-medium">{{ shop.category }}</span>
+                            </td>
+                            <td class="p-4">{{ shop.ownerName }}</td>
+                            <td class="p-4">{{ shop.requestDate }}</td>
+                            <td class="p-4 text-center whitespace-nowrap">
+                                <button @click="approveShop(shop.id)" class="bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg text-xs font-bold mr-2 transition">
+                                    <i class="fa-solid fa-check mr-1"></i> อนุมัติ
+                                </button>
+                                <button @click="rejectShop(shop.id)" class="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg text-xs font-bold transition">
+                                    <i class="fa-solid fa-times mr-1"></i> ปฏิเสธ
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-800 text-slate-400 py-6 border-t border-slate-700 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-sm">
+            <p>Database System Project - กลุ่ม: อาชาบุรุษ</p>
+            <p class="mt-1">สาขาวิศวกรรมซอฟต์แวร์ คณะเทคโนโลยีสารสนเทศและการสื่อสาร มหาวิทยาลัยพะเยา</p>
+        </div>
+    </footer>
+</div>
+
+<script>
+    const { createApp, ref, reactive } = Vue;
+    createApp({
+        setup() {
+            // จำลองข้อมูลสถิติ
+            const stats = reactive({
+                totalShops: 124,
+                totalUsers: '1,540',
+                spamReviews: 2
+            });
+
+            // จำลองข้อมูลร้านที่รออนุมัติ
+            const pendingShops = ref([
+                { id: 1, name: 'ป้าศรี ตามสั่ง', category: 'อาหาร', ownerName: 'สมหญิง รักดี (Owner)', requestDate: '12 ต.ค. 2569' },
+                { id: 2, name: 'หอพัก บ้านอุ่นใจ', category: 'หอพัก', ownerName: 'มานะ อดทน (Owner)', requestDate: '11 ต.ค. 2569' }
+            ]);
+
+            // ฟังก์ชันอนุมัติร้าน
+            const approveShop = (id) => {
+                if(confirm('ยืนยันการอนุมัติร้านค้านี้ลงในระบบ?')) {
+                    pendingShops.value = pendingShops.value.filter(s => s.id !== id);
+                    stats.totalShops++; 
+                }
+            };
+
+            // ฟังก์ชันปฏิเสธร้าน
+            const rejectShop = (id) => {
+                if(confirm('คุณต้องการปฏิเสธและลบคำขอนี้ใช่หรือไม่?')) {
+                    pendingShops.value = pendingShops.value.filter(s => s.id !== id);
+                }
+            };
+
+            const logout = () => {
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('userEmail');
+                window.location.href = 'index.html';
+            };
+
+            return { stats, pendingShops, approveShop, rejectShop, logout }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
