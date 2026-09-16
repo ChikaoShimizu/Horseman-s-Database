@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>body { font-family: 'Prompt', sans-serif; }</style>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center py-10">
@@ -30,6 +31,11 @@
             </button>
         </div>
 
+        <!-- *** เพิ่มกล่องแจ้งเตือน Error ตรงนี้ *** -->
+        <div v-if="errorMessage" class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm flex items-center">
+            <i class="fa-solid fa-circle-exclamation mr-2"></i> {{ errorMessage }}
+        </div>
+
         <form @submit.prevent="handleRegister" class="space-y-4">
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อ - นามสกุล</label>
@@ -46,6 +52,12 @@
                 <input v-model="form.password" type="password" required placeholder="••••••••" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91]">
             </div>
 
+            <!-- *** เพิ่มช่องยืนยันรหัสผ่านตรงนี้ *** -->
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">ยืนยันรหัสผ่าน</label>
+                <input v-model="form.confirmPassword" type="password" required placeholder="••••••••" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91]">
+            </div>
+
             <button type="submit" class="w-full bg-[#5c2e91] hover:bg-purple-800 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md mt-4">
                 ยืนยันการสมัคร
             </button>
@@ -57,20 +69,109 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive } = Vue;
-        createApp({
-            setup() {
-                const role = ref('user');
-                const form = reactive({ name: '', email: '', password: '' });
+    const { createApp, ref, reactive } = Vue;
 
-                const handleRegister = () => {
-                    alert(`จำลองการสมัครสำเร็จ!\nชื่อ: ${form.name}\nสิทธิ์: ${role.value}`);
+    const supabaseUrl = 'https://kmebinvqehwomycufvlj.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZWJpbnZxZWh3b215Y3VmdmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDc5ODMsImV4cCI6MjEwMjc4Mzk4M30.TWGUBnYcoBovJ34q1hhV-yJ8vV-e2sG3tECXOH-HEs4';
+    
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    const hashPassword = async (password) => {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex; 
+    };
+
+    createApp({
+        setup() {
+            const role = ref('user');
+            const form = reactive({ name: '', email: '', password: '', confirmPassword: '' });
+            const errorMessage = ref('');
+
+            const handleRegister = async () => {
+                errorMessage.value = '';
+
+                // 1. เช็คว่ากรอกครบไหม
+                if (!form.email || !form.password || !form.confirmPassword || !form.name) {
+                    errorMessage.value = 'กรุณากรอกข้อมูลให้ครบถ้วน';
+                    return;
+                }
+
+                // 2. เช็ครหัสผ่านและการยืนยันรหัสผ่านตรงกันไหม
+                if (form.password !== form.confirmPassword) {
+                    errorMessage.value = 'รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน';
+                    return;
+                }
+
+                try {
+                    // *** เพิ่มสเต็ปใหม่: ตรวจสอบอีเมลซ้ำในฐานข้อมูลตาราง User ***
+                    const { data: existingUsers, error: checkError } = await supabaseClient
+                        .from('User')
+                        .select('UserEmail')
+                        .eq('UserEmail', form.email); // ค้นหาว่ามีอีเมลนี้ในคอลัมน์ UserEmail หรือไม่
+
+                    if (checkError) {
+                        console.error('Error checking email:', checkError);
+                        errorMessage.value = 'เกิดข้อผิดพลาดในการตรวจสอบข้อมูล';
+                        return;
+                    }
+
+                    // ถ้า existingUsers มีข้อมูล (ความยาวมากกว่า 0) แปลว่ามีคนใช้แล้ว
+                    if (existingUsers && existingUsers.length > 0) {
+                        errorMessage.value = 'อีเมลนี้ถูกใช้งานแล้ว กรุณาใช้อีเมลอื่น';
+                        return; // หยุดการทำงานทันที
+                    }
+                    // ******************************************************
+
+                    // 3. ให้เบราว์เซอร์เข้ารหัสผ่าน 
+                    const encryptedPassword = await hashPassword(form.password);
+
+                    // 4. ใช้ระบบ Auth ของ Supabase (สร้างบัญชี)
+                    const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                        email: form.email,
+                        password: form.password, 
+                        options: {
+                            data: { role: role.value }
+                        }
+                    });
+
+                    // 5. จัดการกรณี Error จากระบบ Auth
+                    if (authError) {
+                        errorMessage.value = 'เกิดข้อผิดพลาดจากระบบ: ' + authError.message;
+                        return;
+                    }
+
+                    // 6. บันทึกลงตาราง User พร้อมรหัสที่ผ่านการ Hashing แล้ว
+                    if (authData.user) {
+                        const { error: insertError } = await supabaseClient.from('User').insert([{
+                            UserEmail: form.email,
+                            Username: form.name,
+                            UserPassword: encryptedPassword
+                        }]);
+
+                        if (insertError) {
+                            console.error('Database Error:', insertError);
+                            errorMessage.value = 'ระบบบันทึกตาราง User ขัดข้อง: ' + insertError.message;
+                            return; 
+                        }
+                    }
+
+                    // ผ่านทุกด่านอย่างสวยงาม
+                    alert('สมัครสมาชิกสำเร็จ!');
                     window.location.href = 'login.html';
-                };
 
-                return { role, form, handleRegister }
-            }
-        }).mount('#app');
-    </script>
+                } catch (err) {
+                    console.error(err);
+                    errorMessage.value = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+                }
+            };
+
+            return { role, form, errorMessage, handleRegister }
+        }
+    }).mount('#app');
+</script>
 </body>
 </html>
