@@ -16,6 +16,8 @@
     
     <!-- โหลด Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- นำไปวางต่อจาก <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>body { font-family: 'Prompt', sans-serif; }</style>
 </head>
@@ -145,6 +147,10 @@
 
 <script>
     // เพิ่ม watch เข้ามาตรงนี้
+    // ดึง Key มาจากหน้า login.html ของคุณ
+    const supabaseUrl = 'https://kmebinvqehwomycufvlj.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZWJpbnZxZWh3b215Y3VmdmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDc5ODMsImV4cCI6MjEwMjc4Mzk4M30.TWGUBnYcoBovJ34q1hhV-yJ8vV-e2sG3tECXOH-HEs4';
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
     const { createApp, reactive, ref, onMounted, watch } = Vue; 
 
     createApp({
@@ -197,7 +203,7 @@
             });
 
             // ฟังก์ชันตรวจสอบและบันทึกข้อมูล
-            const saveShopProfile = () => {
+                  const saveShopProfile = async () => {
                 errorMessage.value = '';
                 successMessage.value = '';
 
@@ -230,12 +236,45 @@
                 successMessage.value = `บันทึกข้อมูลร้าน "${shop.name}" เรียบร้อยแล้ว!`;
                 
                 // จำลองการหน่วงเวลาแล้วพาไปหน้าหลัก
-                setTimeout(() => {
-                    // สามารถใช้ localStorage เพื่อส่งข้อมูลไปโชว์ในหน้า index ได้
-                    alert('ข้อมูลถูกจำลองส่งไปยังระบบส่วนกลางแล้ว');
-                    // window.location.href = 'index.html'; 
-                }, 2000);
-            };
+       // --- จบการตรวจจับ Edge Cases ---
+
+                // แปลงชื่อหมวดหมู่เป็น ID เพื่อให้ตรงกับ Foreign Key ของตาราง Category
+                const categoryMap = { "อาหาร": 1, "คาเฟ่": 2, "ซักรีด": 3, "หอพัก": 4, "ซ่อมรถ": 5 };
+                const categoryId = categoryMap[shop.category] || 1; 
+
+                try {
+                    // ส่งข้อมูลเข้า Supabase ตามโครงสร้างตาราง Shop
+                    const { error } = await supabaseClient
+                        .from('Shop')
+                        .insert([{
+                            ShopCategoryId: categoryId,
+                            ShopName: shop.name,
+                            ShopDescription: shop.description,
+                            ShopLocation: `${shop.lat},${shop.lng}`, // รวมพิกัด
+                            ShopOperatingNote: `เปิด: ${shop.openTime} - ${shop.closeTime}`,
+                            ShopApprovalStatus: 'Pending', // ตั้งค่าสถานะเป็นรออนุมัติ
+                            ShopCreatedAt: new Date().toISOString()
+                        }]);
+
+                    if (error) {
+                        errorMessage.value = 'เกิดข้อผิดพลาดในการบันทึก: ' + error.message;
+                        window.scrollTo(0, 0);
+                        return;
+                    }
+
+                    // หากผ่านทุกเงื่อนไข บันทึกสำเร็จ
+                    successMessage.value = `บันทึกข้อมูลร้าน "${shop.name}" เรียบร้อยแล้ว!`;
+                    
+                    // เอา Comment ออก เพื่อให้เด้งไปหน้า index.html
+                    setTimeout(() => {
+                        window.location.href = 'index.html'; 
+                    }, 2000);
+
+                } catch (err) {
+                    errorMessage.value = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+                    window.scrollTo(0, 0);
+                }
+            }; // ปิดฟังก์ชัน saveShopProfile
 
             return {
                 shop,
