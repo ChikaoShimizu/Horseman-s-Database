@@ -89,6 +89,13 @@
                     <textarea v-model="shop.description" rows="3" placeholder="อธิบายจุดเด่นของร้าน..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none"></textarea>
                 </div>
 
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">รูปภาพร้านค้า (หน้าปก)</label>
+                    <input type="file" accept="image/*" @change="handleFileUpload" class="w-full px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91]">
+                    <!-- แสดงรูปตัวอย่างก่อนอัปโหลด -->
+                    <img v-if="imagePreview" :src="imagePreview" class="mt-4 h-40 w-auto object-cover rounded-lg shadow border border-slate-200">
+                </div>
+
                 <div class="grid grid-cols-2 gap-6">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">เวลาเปิด <span class="text-red-500">*</span></label>
@@ -148,6 +155,7 @@
 <script>
     // เพิ่ม watch เข้ามาตรงนี้
     // ดึง Key มาจากหน้า login.html ของคุณ
+    // ดึง Key มาจากหน้า login.html ของคุณ
     const supabaseUrl = 'https://kmebinvqehwomycufvlj.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZWJpbnZxZWh3b215Y3VmdmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDc5ODMsImV4cCI6MjEwMjc4Mzk4M30.TWGUBnYcoBovJ34q1hhV-yJ8vV-e2sG3tECXOH-HEs4';
     const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -187,100 +195,88 @@
                 });
             });
 
-            // --- ส่วนที่เพิ่มใหม่: ให้ Vue จับตาดูตัวแปร lat และ lng ตลอดเวลา ---
             watch([() => shop.lat, () => shop.lng], ([newLat, newLng]) => {
                 const lat = parseFloat(newLat);
                 const lng = parseFloat(newLng);
 
-                // ถ้าตัวเลขถูกต้อง และโหลดแผนที่เสร็จแล้ว
                 if (!isNaN(lat) && !isNaN(lng) && map) {
                     if (marker) {
                         map.removeLayer(marker);
                     }
                     marker = L.marker([lat, lng]).addTo(map);
-                    map.setView([lat, lng], map.getZoom()); // ขยับแผนที่ตาม
+                    map.setView([lat, lng], map.getZoom()); 
                 }
             });
 
-            // ฟังก์ชันตรวจสอบและบันทึกข้อมูล
-                  const saveShopProfile = async () => {
+            const selectedFile = ref(null);
+            const imagePreview = ref('');
+
+            const handleFileUpload = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    selectedFile.value = file;
+                    imagePreview.value = URL.createObjectURL(file); 
+                }
+            };
+
+            const saveShopProfile = async () => {
                 errorMessage.value = '';
-                successMessage.value = '';
-
-                // --- เริ่มตรวจจับ Edge Cases ---
+                successMessage.value = ''; // เคลียร์ข้อความสำเร็จเก่า
                 
-                // 1. ตรวจสอบว่ากรอกข้อมูลจำเป็นครบไหม (Happy Path ของข้อ 2.1)
-                if (!shop.name || !shop.category || !shop.openTime || !shop.closeTime) {
-                    errorMessage.value = 'กรุณากรอกข้อมูลที่มีเครื่องหมายดอกจัน (*) ให้ครบถ้วน';
-                    window.scrollTo(0, 0); // เลื่อนจอขึ้นไปดู Error
-                    return;
+                if (!shop.name || !shop.category) { 
+                    errorMessage.value = 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน';
+                    return; 
                 }
-
-                // 2. ตรวจสอบเวลา (Edge Case: ลืมตั้งเวลาปิด หรือ กรอกเวลาเปิดหลังเวลาปิด)
-                if (shop.openTime >= shop.closeTime) {
-                    errorMessage.value = 'เวลาเปิดร้านต้องอยู่ก่อนเวลาปิดร้านเสมอ และห้ามเป็นเวลาเดียวกัน';
-                    window.scrollTo(0, 0);
-                    return;
-                }
-
-                // 3. ตรวจสอบการปักหมุดแผนที่ (Edge Case ของข้อ 2.2)
-                if (!shop.lat || !shop.lng) {
-                    errorMessage.value = 'กรุณาคลิกบนแผนที่เพื่อปักหมุดที่ตั้งของร้านคุณ';
-                    window.scrollTo(0, 0);
-                    return;
-                }
-
-                // --- จบการตรวจจับ Edge Cases ---
-
-                // หากผ่านทุกเงื่อนไข (Happy Path)
-                successMessage.value = `บันทึกข้อมูลร้าน "${shop.name}" เรียบร้อยแล้ว!`;
-                
-                // จำลองการหน่วงเวลาแล้วพาไปหน้าหลัก
-       // --- จบการตรวจจับ Edge Cases ---
-
-                // แปลงชื่อหมวดหมู่เป็น ID เพื่อให้ตรงกับ Foreign Key ของตาราง Category
-                const categoryMap = { "อาหาร": 1, "คาเฟ่": 2, "ซักรีด": 3, "หอพัก": 4, "ซ่อมรถ": 5 };
-                const categoryId = categoryMap[shop.category] || 1; 
 
                 try {
-                    // ส่งข้อมูลเข้า Supabase ตามโครงสร้างตาราง Shop
-                    const { error } = await supabaseClient
+                    // แปลงหมวดหมู่เป็นตัวเลขให้ตรงกับที่สร้างไว้ใน Database
+                    let categoryId = 1;
+                    if (shop.category === 'คาเฟ่') categoryId = 2;
+                    else if (shop.category === 'ซักรีด') categoryId = 3;
+                    else if (shop.category === 'หอพัก') categoryId = 4;
+                    else if (shop.category === 'ซ่อมรถ') categoryId = 5;
+
+                    // 1. บันทึกแค่ข้อมูล Text ลงตาราง Shop เท่านั้น (ปิดระบบรูปไว้ก่อน)
+                    const { data: shopData, error: shopError } = await supabaseClient
                         .from('Shop')
                         .insert([{
-                            ShopCategoryId: categoryId,
                             ShopName: shop.name,
                             ShopDescription: shop.description,
-                            ShopLocation: `${shop.lat},${shop.lng}`, // รวมพิกัด
-                            ShopOperatingNote: `เปิด: ${shop.openTime} - ${shop.closeTime}`,
-                            ShopApprovalStatus: 'Pending', // ตั้งค่าสถานะเป็นรออนุมัติ
-                            ShopCreatedAt: new Date().toISOString()
-                        }]);
+                            ShopCategoryId: categoryId, 
+                            ShopLocation: `${shop.lat},${shop.lng}`,
+                            ShopOperatingNote: `${shop.openTime} - ${shop.closeTime}`,
+                            ShopApprovalStatus: 'Pending'
+                        }])
+                        .select(); 
 
-                    if (error) {
-                        errorMessage.value = 'เกิดข้อผิดพลาดในการบันทึก: ' + error.message;
-                        window.scrollTo(0, 0);
-                        return;
-                    }
-
-                    // หากผ่านทุกเงื่อนไข บันทึกสำเร็จ
-                    successMessage.value = `บันทึกข้อมูลร้าน "${shop.name}" เรียบร้อยแล้ว!`;
+                    if (shopError) throw shopError;
                     
-                    // เอา Comment ออก เพื่อให้เด้งไปหน้า index.html
-                    setTimeout(() => {
-                        window.location.href = 'index.html'; 
-                    }, 2000);
+                    // ปิดส่วนอัปโหลดรูปภาพไว้ชั่วคราว เพื่อทดสอบการบันทึกฐานข้อมูล
+                    /*
+                    const newShopId = shopData[0].ShopID; 
+                    if (selectedFile.value) { ... }
+                    */
+
+                    // แสดงกล่องข้อความสีเขียว
+                    successMessage.value = 'ข้อมูลร้านค้าเข้าสู่ระบบ Supabase เรียบร้อยแล้ว!';
+                    
+                    // ปิดการเด้งไปหน้า index ชั่วคราว จะได้เห็นว่ามันทำงานสำเร็จจริงๆ
+                    // window.location.href = 'index.html'; 
 
                 } catch (err) {
-                    errorMessage.value = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
-                    window.scrollTo(0, 0);
+                    console.error('Error saving shop:', err);
+                    errorMessage.value = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + err.message;
                 }
-            }; // ปิดฟังก์ชัน saveShopProfile
+            };
 
+            // *** สำคัญมาก: ต้อง return ตัวแปรเหล่านี้ออกไปให้ HTML ใช้ด้วย ***
             return {
                 shop,
                 errorMessage,
                 successMessage,
-                saveShopProfile
+                saveShopProfile,
+                handleFileUpload, // <--- เพิ่มตรงนี้
+                imagePreview      // <--- เพิ่มตรงนี้
             }
         }
     }).mount('#app');
