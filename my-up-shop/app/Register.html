@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config.js"></script>
     <style>body { font-family: 'Prompt', sans-serif; }</style>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center py-10">
@@ -72,7 +71,10 @@
     <script>
     const { createApp, ref, reactive } = Vue;
 
-    const supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+    const supabaseUrl = 'https://kmebinvqehwomycufvlj.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZWJpbnZxZWh3b215Y3VmdmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDc5ODMsImV4cCI6MjEwMjc4Mzk4M30.TWGUBnYcoBovJ34q1hhV-yJ8vV-e2sG3tECXOH-HEs4';
+    
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
     const hashPassword = async (password) => {
         const encoder = new TextEncoder();
