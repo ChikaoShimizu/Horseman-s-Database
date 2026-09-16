@@ -9,7 +9,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>body { font-family: 'Prompt', sans-serif; }</style>
 </head>
@@ -54,75 +53,69 @@
     <script>
         const { createApp, ref } = Vue;
 
-// 1. เพิ่มการเชื่อมต่อ Supabase (ใช้ Key เดียวกับ Register.html)
-const supabaseUrl = 'https://kmebinvqehwomycufvlj.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZWJpbnZxZWh3b215Y3VmdmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDc5ODMsImV4cCI6MjEwMjc4Mzk4M30.TWGUBnYcoBovJ34q1hhV-yJ8vV-e2sG3tECXOH-HEs4';
-const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+        createApp({
+            setup() {
+                const showPassword = ref(false);
+                const email = ref('');
+                const password = ref('');
+                const errorMessage = ref('');
 
-createApp({
-    setup() {
-        const showPassword = ref(false);
-        const email = ref('');
-        const password = ref('');
-        const errorMessage = ref('');
+                const togglePassword = () => {
+                    showPassword.value = !showPassword.value;
+                };
 
-        const togglePassword = () => {
-            showPassword.value = !showPassword.value;
-        };
+                const handleLogin = () => {
+                    // ล้างข้อความแจ้งเตือนเก่า
+                    errorMessage.value = '';
 
-        // 2. เปลี่ยนเป็น async function และเช็คกับ Supabase Auth
-        const handleLogin = async () => {
-            errorMessage.value = '';
-
-            // ตรวจสอบการเว้นว่าง
-            if (!email.value || !password.value) {
-                errorMessage.value = 'กรุณากรอกข้อมูลให้ครบถ้วน';
-                return;
-            }
-
-            try {
-                // ส่งข้อมูลไปยืนยันกับ Supabase
-                const { data, error } = await supabaseClient.auth.signInWithPassword({
-                    email: email.value,
-                    password: password.value,
-                });
-
-                // ตรวจสอบ Error
-                if (error) {
-                    if (error.message.includes('Invalid login credentials')) {
-                        errorMessage.value = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
-                    } else {
-                        errorMessage.value = 'เกิดข้อผิดพลาด: ' + error.message;
+                    // 1. ตรวจสอบว่ากรอกอีเมลหรือไม่
+                    if (!email.value) {
+                        errorMessage.value = 'กรุณากรอกอีเมล';
+                        return;
                     }
-                    return;
-                }
 
-                // กรณีเข้าสู่ระบบสำเร็จ
-                if (data.user) {
-                    localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('userEmail', data.user.email);
+                    // 2. ตรวจสอบว่ากรอกรหัสผ่านหรือไม่
+                    if (!password.value) {
+                        errorMessage.value = 'กรุณากรอกรหัสผ่าน';
+                        return;
+                    }
+
+                    // 3. (Optional) คุณสามารถเพิ่มการตรวจสอบความถูกต้องของอีเมลหรือรหัสผ่านจำลองตรงนี้ได้
+                    // ตัวอย่าง: ถ้าอยากให้ล็อกอินได้เฉพาะอีเมล test@test.com
                     
-                    const userRole = data.user.user_metadata?.role || 'user';
-                    localStorage.setItem('userRole', userRole);
+                    /*
+                    if (email.value !== 'test@test.com' || password.value !== '1234') {
+                        errorMessage.value = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+                        return;
+                    }
+                    */
 
-                    window.location.href = 'index.html';
+                    // ถ้่าข้อมูลครบถ้วน ให้เปลี่ยนหน้าไปยัง index.html
+                    // สามารถบันทึกสถานะการล็อกอินลง localStorage ได้ (เพื่อให้หน้า index.html รู้ว่าล็อกอินแล้ว)
+                    // ... (เช็คอีเมลรหัสผ่านผ่านแล้ว)
+                    localStorage.setItem('isLoggedIn', 'true');
+                    localStorage.setItem('userEmail', email.value);
+
+                    // จำลอง Role: ถ้าอีเมลมีคำว่า owner ให้เป็นเจ้าของร้าน ถ้าไม่ใช่เป็นแค่ user
+                    if (email.value.includes('owner')) {
+                        localStorage.setItem('userRole', 'owner');
+                    } else {
+                        localStorage.setItem('userRole', 'user');
+                    }
+
+                        window.location.href = 'index.html';
+                };
+
+                return {
+                    showPassword,
+                    email,
+                    password,
+                    errorMessage,
+                    togglePassword,
+                    handleLogin
                 }
-            } catch (err) {
-                console.error(err);
-                errorMessage.value = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
             }
-        };
-
-        return {
-            showPassword,
-            email,
-            password,
-            errorMessage,
-            togglePassword,
-            handleLogin
-        }
-    }
-}).mount('#app');
+        }).mount('#app');
     </script>
-    </body>
-    </html>
+</body>
+</html>
