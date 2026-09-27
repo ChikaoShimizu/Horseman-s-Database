@@ -49,13 +49,23 @@
             
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">รหัสผ่าน</label>
-                <input v-model="form.password" type="password" required placeholder="••••••••" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91]">
+                <div class="relative">
+                    <input v-model="form.password" :type="showPassword ? 'text' : 'password'" required placeholder="••••••••" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91] pr-12">
+                    <button type="button" @click="togglePassword" :aria-label="showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'" :title="showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-[#5c2e91] focus:outline-none transition">
+                        <i :class="showPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- *** เพิ่มช่องยืนยันรหัสผ่านตรงนี้ *** -->
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">ยืนยันรหัสผ่าน</label>
-                <input v-model="form.confirmPassword" type="password" required placeholder="••••••••" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91]">
+                <div class="relative">
+                    <input v-model="form.confirmPassword" :type="showConfirmPassword ? 'text' : 'password'" required placeholder="••••••••" class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91] pr-12">
+                    <button type="button" @click="toggleConfirmPassword" :aria-label="showConfirmPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'" :title="showConfirmPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-[#5c2e91] focus:outline-none transition">
+                        <i :class="showConfirmPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'"></i>
+                    </button>
+                </div>
             </div>
 
             <button type="submit" class="w-full bg-[#5c2e91] hover:bg-purple-800 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md mt-4">
@@ -90,6 +100,16 @@
             const role = ref('user');
             const form = reactive({ name: '', email: '', password: '', confirmPassword: '' });
             const errorMessage = ref('');
+            const showPassword = ref(false);
+            const showConfirmPassword = ref(false);
+
+            const togglePassword = () => {
+                showPassword.value = !showPassword.value;
+            };
+
+            const toggleConfirmPassword = () => {
+                showConfirmPassword.value = !showConfirmPassword.value;
+            };
 
             const handleRegister = async () => {
                 errorMessage.value = '';
@@ -170,7 +190,7 @@
                 }
             };
 
-            return { role, form, errorMessage, handleRegister }
+            return { role, form, errorMessage, handleRegister, showPassword, showConfirmPassword, togglePassword, toggleConfirmPassword }
         }
     }).mount('#app');
 </script>
