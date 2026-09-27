@@ -79,7 +79,7 @@
                             <option value="คาเฟ่">คาเฟ่</option>
                             <option value="ซักรีด">ซักรีด</option>
                             <option value="หอพัก">หอพัก</option>
-                            <option value="ซ่อมรถ">ซ่อมรถ</option>
+                            <option value="บริการ">บริการ</option>
                         </select>
                     </div>
                 </div>
@@ -234,7 +234,7 @@
                     if (shop.category === 'คาเฟ่') categoryId = 2;
                     else if (shop.category === 'ซักรีด') categoryId = 3;
                     else if (shop.category === 'หอพัก') categoryId = 4;
-                    else if (shop.category === 'ซ่อมรถ') categoryId = 5;
+                    else if (shop.category === 'บริการ') categoryId = 5;
 
                     // 1. บันทึกแค่ข้อมูล Text ลงตาราง Shop เท่านั้น (ปิดระบบรูปไว้ก่อน)
                     const { data: shopData, error: shopError } = await supabaseClient

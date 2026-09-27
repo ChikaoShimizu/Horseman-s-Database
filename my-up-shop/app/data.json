@@ -55,7 +55,7 @@
     {
       "id": 4,
       "name": "ช่างนพ ซ่อมมอเตอร์ไซค์",
-      "category": "ซ่อมรถ",
+      "category": "บริการ",
       "rating": 4.0,
       "isOpen": true,
       "openTime": "09:00",
@@ -74,6 +74,6 @@
     { "id": 2, "name": "คาเฟ่", "icon": "fa-solid fa-mug-hot" },
     { "id": 3, "name": "ซักรีด", "icon": "fa-solid fa-tshirt" },
     { "id": 4, "name": "หอพัก", "icon": "fa-solid fa-building" },
-    { "id": 5, "name": "ซ่อมรถ", "icon": "fa-solid fa-wrench" }
+    { "id": 5, "name": "บริการ", "icon": "fa-solid fa-wrench" }
   ]
 }
