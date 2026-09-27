@@ -32,6 +32,9 @@
     <!-- Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 
+    <!-- Supabase (ใช้คีย์เดียวกับ login.html / Register.html) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; }
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
@@ -289,17 +292,36 @@
                                     
                                     <!-- Add Review Form -->
                                     <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6">
-                                        <div v-if="currentUser" class="space-y-4">
-                                            <h4 class="font-bold text-gray-700">เขียนรีวิวของคุณ</h4>
-                                            <div class="flex text-2xl text-gray-300 gap-1">
-                                                <i class="fa-solid fa-star cursor-pointer hover:text-upGold" v-for="n in 5" :key="n" :class="{'text-upGold': newReview.rating >= n}" @click="newReview.rating = n"></i>
-                                            </div>
-                                            <textarea v-model="newReview.comment" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-upPurple focus:ring-1 focus:ring-upPurple" rows="3" placeholder="แบ่งปันประสบการณ์ของคุณ..."></textarea>
-                                            <button @click="submitReview" class="bg-upPurple hover:bg-purple-800 text-white font-bold py-2 px-6 rounded-lg transition">ส่งรีวิว</button>
+                                        <!-- กำลังตรวจสอบสถานะการเข้าสู่ระบบจาก Supabase -->
+                                        <div v-if="isAuthLoading" class="text-center py-4 text-gray-500 text-sm">
+                                            <i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังตรวจสอบสถานะการเข้าสู่ระบบ...
                                         </div>
+
+                                        <!-- เฉพาะผู้ที่ล็อกอินแล้วเท่านั้นที่เขียนรีวิวได้ -->
+                                        <div v-else-if="currentUser" class="space-y-4">
+                                            <h4 class="font-bold text-gray-700">เขียนรีวิวของคุณ</h4>
+                                            <p class="text-xs text-gray-500">
+                                                <i class="fa-solid fa-circle-check text-green-500 mr-1"></i>
+                                                กำลังรีวิวในชื่อ <span class="font-medium">{{ currentUser.email }}</span>
+                                            </p>
+                                            <div class="flex text-2xl text-gray-300 gap-1">
+                                                <i class="fa-solid fa-star cursor-pointer hover:text-upGold" v-for="n in 5" :key="n" :class="{'text-upGold': newReview.rating >= n}" @click="setRating(n)"></i>
+                                            </div>
+                                            <textarea v-model="newReview.comment" :disabled="isSubmittingReview" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-upPurple focus:ring-1 focus:ring-upPurple disabled:bg-gray-100 disabled:cursor-not-allowed" rows="3" placeholder="แบ่งปันประสบการณ์ของคุณ..."></textarea>
+                                            <button @click="submitReview" :disabled="isSubmittingReview" class="bg-upPurple hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 px-6 rounded-lg transition">
+                                                {{ isSubmittingReview ? 'กำลังส่งรีวิว...' : 'ส่งรีวิว' }}
+                                            </button>
+                                        </div>
+
+                                        <!-- ยังไม่ได้เข้าสู่ระบบ -->
                                         <div v-else class="text-center py-4">
-                                            <p class="text-gray-600 mb-3">กรุณาเข้าสู่ระบบก่อนเขียนรีวิว</p>
-                                            <button @click="toggleLogin" class="bg-white border border-upPurple text-upPurple font-bold py-2 px-6 rounded-lg hover:bg-purple-50 transition">เข้าสู่ระบบ</button>
+                                            <i class="fa-solid fa-lock text-gray-400 text-3xl mb-3"></i>
+                                            <p class="text-gray-700 font-medium mb-1">กรุณาเข้าสู่ระบบก่อนเขียนรีวิว</p>
+                                            <p class="text-gray-400 text-sm mb-4">เฉพาะสมาชิกที่เข้าสู่ระบบแล้วเท่านั้นที่สามารถรีวิวร้านค้าได้</p>
+                                            <div class="flex gap-2 justify-center">
+                                                <button @click="toggleLogin" class="bg-upPurple hover:bg-purple-800 text-white font-bold py-2 px-6 rounded-lg transition">เข้าสู่ระบบ</button>
+                                                <a href="Register.html" class="bg-white border border-upPurple text-upPurple font-bold py-2 px-6 rounded-lg hover:bg-purple-50 transition">สมัครสมาชิก</a>
+                                            </div>
                                         </div>
                                     </div>
                                     
@@ -433,7 +455,12 @@
 </div>
 
 <script>
-    const { createApp, ref, computed, reactive, onMounted } = Vue
+    const { createApp, ref, computed, reactive, onMounted, onUnmounted } = Vue
+
+// 1. เชื่อมต่อ Supabase (ใช้ Key เดียวกับ login.html / Register.html)
+const supabaseUrl = 'https://kmebinvqehwomycufvlj.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZWJpbnZxZWh3b215Y3VmdmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDc5ODMsImV4cCI6MjEwMjc4Mzk4M30.TWGUBnYcoBovJ34q1hhV-yJ8vV-e2sG3tECXOH-HEs4';
+const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
     createApp({
         setup() {
@@ -442,6 +469,8 @@
             const searchCategory = ref('');
             const filterOpenNow = ref(false);
             const currentUser = ref(null); 
+            const isAuthLoading = ref(true);
+            const isSubmittingReview = ref(false);
             const selectedShop = ref(null);
             const newReview = reactive({ rating: 0, comment: '' });
 
@@ -465,25 +494,57 @@
                 }
             };
 
-            onMounted(() => {
-            // 1. ต้องมีบรรทัดนี้ เพื่อให้ไปโหลดข้อมูลร้านค้าจากไฟล์ JSON มาแสดง
-                 loadData(); 
+// 2. ดึงผู้ใช้จาก Supabase Session จริง (ไม่เชื่อ localStorage ที่แก้เองได้)
+            const buildUser = (user) => {
+                if (!user) return null;
+                const displayName = user.user_metadata?.name
+                    || user.user_metadata?.user_name
+                    || (user.email ? user.email.split('@')[0] : 'User');
+                return {
+                    id: user.id,
+                    email: user.email,
+                    name: displayName,
+                    role: user.user_metadata?.role || 'user'
+                };
+            };
 
-            // 2. ส่วนตรวจสอบสถานะการล็อกอินและ Role
-            const isLoggedIn = localStorage.getItem('isLoggedIn');
-                if (isLoggedIn === 'true') {
-                    const userEmail = localStorage.getItem('userEmail');
-                    const displayName = userEmail ? userEmail.split('@')[0] : 'User';
-        
-                    // ดึง role ออกมา ถ้าไม่มีให้ถือว่าเป็น 'user' ทั่วไป
-                    const savedRole = localStorage.getItem('userRole') || 'user';
-        
-                    currentUser.value = { 
-                        id: 99, 
-                        name: displayName, 
-                        role: savedRole
-                    };
+            const resolveUser = async () => {
+                isAuthLoading.value = true;
+                try {
+                    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+                    if (sessionError) throw sessionError;
+                    if (!sessionData?.session) {
+                        currentUser.value = null;
+                        return;
+                    }
+                    // ยืนยันกับ Supabase Auth อีกครั้ง เพื่อไม่รับ token ที่หมดอายุ/ถูกปลอมแปลง
+                    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+                    if (userError || !userData?.user) {
+                        currentUser.value = null;
+                        return;
+                    }
+                    currentUser.value = buildUser(userData.user);
+                } catch (error) {
+                    console.error('Error resolving session:', error);
+                    currentUser.value = null;
+                } finally {
+                    isAuthLoading.value = false;
                 }
+            };
+
+            // คงสถานะให้ตรงกับ session เสมอ (เช่น ออกจากระบบจากแท็บอื่น หรือ token หมดอายุ)
+            const { data: authListener } = supabaseClient.auth.onAuthStateChange((event, session) => {
+                currentUser.value = session?.user ? buildUser(session.user) : null;
+                isAuthLoading.value = false;
+            });
+
+            onMounted(() => {
+                loadData();
+                resolveUser();
+            });
+
+            onUnmounted(() => {
+                authListener?.subscription?.unsubscribe();
             });
 
             const navigate = (view) => {
@@ -505,34 +566,86 @@
                 window.location.href = 'login.html';
             };
 
-            const logout = () => {
+// 3. บังคับให้ต้องมี session จริงก่อนเข้าสู่ขั้นตอนการรีวิว
+            const requireLogin = () => {
+                alert('กรุณาเข้าสู่ระบบก่อนเขียนรีวิว');
+                toggleLogin();
+            };
+
+            const logout = async () => {
+                try {
+                    await supabaseClient.auth.signOut();
+                } catch (error) {
+                    console.error('Error signing out:', error);
+                }
                 currentUser.value = null;
                 localStorage.removeItem('isLoggedIn');
                 localStorage.removeItem('userEmail');
+                localStorage.removeItem('userRole');
+                newReview.rating = 0;
+                newReview.comment = '';
                 navigate('home'); // กลับไปหน้าแรกเสมอเพื่อความปลอดภัย
                 alert('ออกจากระบบเรียบร้อยแล้ว');
             };
 
-            const submitReview = () => {
+            const setRating = (n) => {
+                if (!currentUser.value || isSubmittingReview.value) return;
+                newReview.rating = n;
+            };
+
+// 4. ตรวจสอบซ้ำฝั่ง logic ไม่ให้พึ่งแค่ v-if ใน template
+            const submitReview = async () => {
+                if (isAuthLoading.value) {
+                    alert('กรุณารอสักครู่ กำลังตรวจสอบสถานะการเข้าสู่ระบบ');
+                    return;
+                }
+                if (!currentUser.value) {
+                    requireLogin();
+                    return;
+                }
+                if (!selectedShop.value) return;
+                if (isSubmittingReview.value) return;
+
                 if (newReview.rating === 0) {
                     alert('กรุณาให้คะแนนดาวก่อนส่งรีวิว');
                     return;
                 }
-                
-                selectedShop.value.reviews.unshift({
-                    id: Date.now(),
-                    user: currentUser.value.name,
-                    rating: newReview.rating,
-                    comment: newReview.comment || '-',
-                    date: 'เพิ่งรีวิว'
-                });
+                if (!newReview.comment.trim()) {
+                    alert('กรุณาเขียนรีวิวของคุณก่อนส่ง');
+                    return;
+                }
 
-                const totalRating = selectedShop.value.reviews.reduce((sum, rev) => sum + rev.rating, 0);
-                selectedShop.value.rating = totalRating / selectedShop.value.reviews.length;
+                isSubmittingReview.value = true;
+                try {
+                    await new Promise((resolve) => setTimeout(resolve, 300));
 
-                newReview.rating = 0;
-                newReview.comment = '';
-                alert('บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณครับ!');
+                    // เช็คซ้ำก่อนบันทึกจริง กันเผยแพร่ระวัง session หมดอายุระหว่างพิมพ์
+                    if (!currentUser.value) {
+                        requireLogin();
+                        return;
+                    }
+
+                    selectedShop.value.reviews.unshift({
+                        id: Date.now(),
+                        user: currentUser.value.name,
+                        userEmail: currentUser.value.email,
+                        rating: newReview.rating,
+                        comment: newReview.comment.trim(),
+                        date: 'เพิ่งรีวิว'
+                    });
+
+                    const totalRating = selectedShop.value.reviews.reduce((sum, rev) => sum + rev.rating, 0);
+                    selectedShop.value.rating = totalRating / selectedShop.value.reviews.length;
+
+                    newReview.rating = 0;
+                    newReview.comment = '';
+                    alert('บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณครับ!');
+                } catch (err) {
+                    console.error('Error submitting review:', err);
+                    alert('เกิดข้อผิดพลาดในการบันทึกรีวิว กรุณาลองใหม่อีกครั้ง');
+                } finally {
+                    isSubmittingReview.value = false;
+                }
             };
 
             const filteredShops = computed(() => {
@@ -550,6 +663,8 @@
                 searchCategory,
                 filterOpenNow,
                 currentUser,
+                isAuthLoading,
+                isSubmittingReview,
                 categories,
                 shops,
                 filteredShops,
@@ -561,6 +676,7 @@
                 viewShopDetail,
                 toggleLogin,
                 logout,
+                setRating,
                 submitReview
                 
             }
