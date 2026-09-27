@@ -32,6 +32,8 @@
 
     <style>
         body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
         
         /* Custom Scrollbar ให้เหมือน index.html */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -142,6 +144,35 @@
             <p class="mt-1">สาขาวิศวกรรมซอฟต์แวร์ คณะเทคโนโลยีสารสนเทศและการสื่อสาร มหาวิทยาลัยพะเยา</p>
         </div>
     </footer>
+
+    <!-- Confirm Modal (แทน confirm) -->
+    <transition name="fade">
+        <div v-if="confirmModal.show" class="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/50" @click="closeConfirm"></div>
+            <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 border border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">{{ confirmModal.title }}</h3>
+                <p class="text-sm text-slate-500 mb-6">{{ confirmModal.message }}</p>
+                <div class="flex justify-end gap-2">
+                    <button @click="closeConfirm" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition">ยกเลิก</button>
+                    <button @click="confirmAction" :class="confirmModal.danger ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'" class="px-4 py-2 rounded-lg text-white font-bold transition">{{ confirmModal.confirmText }}</button>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Toast Notification (แทน alert) -->
+    <transition name="fade">
+        <div v-if="toast.show" class="fixed bottom-6 right-6 z-[100] max-w-sm w-[calc(100%-3rem)]">
+            <div :class="toast.type === 'success' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-red-100 border-red-500 text-red-700'"
+                 class="border-l-4 rounded-r-lg shadow-lg p-4 flex items-start gap-3">
+                <i :class="toast.type === 'success' ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-exclamation'" class="mt-0.5 text-lg"></i>
+                <p class="text-sm font-medium flex-1">{{ toast.message }}</p>
+                <button @click="toast.show = false" class="opacity-60 hover:opacity-100 transition" aria-label="ปิดการแจ้งเตือน">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+    </transition>
 </div>
 
 <script>
@@ -161,19 +192,63 @@
                 { id: 2, name: 'หอพัก บ้านอุ่นใจ', category: 'หอพัก', ownerName: 'มานะ อดทน (Owner)', requestDate: '11 ต.ค. 2569' }
             ]);
 
+            const toast = reactive({ show: false, type: 'success', message: '' });
+            let toastTimer = null;
+            const showToast = (type, message, duration = 3500) => {
+                toast.type = type;
+                toast.message = message;
+                toast.show = true;
+                if (toastTimer) clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => { toast.show = false; }, duration);
+            };
+
+            const confirmModal = reactive({ show: false, title: '', message: '', confirmText: 'ยืนยัน', danger: false, action: null });
+            const openConfirm = ({ title, message, confirmText, danger, action }) => {
+                confirmModal.title = title;
+                confirmModal.message = message;
+                confirmModal.confirmText = confirmText;
+                confirmModal.danger = danger;
+                confirmModal.action = action;
+                confirmModal.show = true;
+            };
+            const closeConfirm = () => {
+                confirmModal.show = false;
+                confirmModal.action = null;
+            };
+            const confirmAction = () => {
+                if (confirmModal.action) confirmModal.action();
+                closeConfirm();
+            };
+
             // ฟังก์ชันอนุมัติร้าน
             const approveShop = (id) => {
-                if(confirm('ยืนยันการอนุมัติร้านค้านี้ลงในระบบ?')) {
-                    pendingShops.value = pendingShops.value.filter(s => s.id !== id);
-                    stats.totalShops++; 
-                }
+                const shop = pendingShops.value.find(s => s.id === id);
+                openConfirm({
+                    title: 'ยืนยันการอนุมัติ',
+                    message: shop ? `อนุมัติร้าน "${shop.name}" ลงในระบบใช่หรือไม่?` : 'ยืนยันการอนุมัติร้านค้านี้ลงในระบบ?',
+                    confirmText: 'อนุมัติ',
+                    danger: false,
+                    action: () => {
+                        pendingShops.value = pendingShops.value.filter(s => s.id !== id);
+                        stats.totalShops++;
+                        showToast('success', 'อนุมัติร้านค้าเรียบร้อยแล้ว');
+                    }
+                });
             };
 
             // ฟังก์ชันปฏิเสธร้าน
             const rejectShop = (id) => {
-                if(confirm('คุณต้องการปฏิเสธและลบคำขอนี้ใช่หรือไม่?')) {
-                    pendingShops.value = pendingShops.value.filter(s => s.id !== id);
-                }
+                const shop = pendingShops.value.find(s => s.id === id);
+                openConfirm({
+                    title: 'ยืนยันการปฏิเสธ',
+                    message: shop ? `ปฏิเสธและลบคำขอของร้าน "${shop.name}" ใช่หรือไม่?` : 'คุณต้องการปฏิเสธและลบคำขอนี้ใช่หรือไม่?',
+                    confirmText: 'ปฏิเสธ',
+                    danger: true,
+                    action: () => {
+                        pendingShops.value = pendingShops.value.filter(s => s.id !== id);
+                        showToast('success', 'ปฏิเสธคำขอเรียบร้อยแล้ว');
+                    }
+                });
             };
             
             const logout = () => {
@@ -182,7 +257,7 @@
                 window.location.href = 'index.html';
             };
 
-            return { stats, pendingShops, approveShop, rejectShop, logout }
+            return { stats, pendingShops, approveShop, rejectShop, logout, toast, showToast, confirmModal, openConfirm, closeConfirm, confirmAction }
         }
     }).mount('#app');
 </script>

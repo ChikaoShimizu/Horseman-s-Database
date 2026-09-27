@@ -452,6 +452,21 @@
             <p class="mt-1">สาขาวิศวกรรมซอฟต์แวร์ คณะเทคโนโลยีสารสนเทศและการสื่อสาร มหาวิทยาลัยพะเยา</p>
         </div>
     </footer>
+
+    <!-- Toast Notification (แทน alert) -->
+    <transition name="fade">
+        <div v-if="toast.show" class="fixed bottom-6 right-6 z-[100] max-w-sm w-[calc(100%-3rem)]">
+            <div :class="toast.type === 'success' ? 'bg-green-100 border-green-500 text-green-700' : toast.type === 'info' ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-red-100 border-red-500 text-red-700'"
+                 class="border-l-4 rounded-r-lg shadow-lg p-4 flex items-start gap-3">
+                <i :class="toast.type === 'success' ? 'fa-solid fa-circle-check' : toast.type === 'info' ? 'fa-solid fa-circle-info' : 'fa-solid fa-circle-exclamation'"
+                   class="mt-0.5 text-lg"></i>
+                <p class="text-sm font-medium flex-1">{{ toast.message }}</p>
+                <button @click="toast.show = false" class="opacity-60 hover:opacity-100 transition" aria-label="ปิดการแจ้งเตือน">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+    </transition>
 </div>
 
 <script>
@@ -473,6 +488,16 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             const isSubmittingReview = ref(false);
             const selectedShop = ref(null);
             const newReview = reactive({ rating: 0, comment: '' });
+            const toast = reactive({ show: false, type: 'info', message: '' });
+            let toastTimer = null;
+
+            const showToast = (type, message, duration = 3500) => {
+                toast.type = type;
+                toast.message = message;
+                toast.show = true;
+                if (toastTimer) clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => { toast.show = false; }, duration);
+            };
 
             const categories = ref([]);
             const shops = ref([]);
@@ -488,7 +513,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     categories.value = data.categories;
                 } catch (error) {
                     console.error("Error loading data:", error);
-                    alert("เกิดข้อผิดพลาดในการโหลดข้อมูลร้านค้า");
+                    showToast('error', 'เกิดข้อผิดพลาดในการโหลดข้อมูลร้านค้า');
                 } finally {
                     isLoading.value = false;
                 }
@@ -568,7 +593,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // 3. บังคับให้ต้องมี session จริงก่อนเข้าสู่ขั้นตอนการรีวิว
             const requireLogin = () => {
-                alert('กรุณาเข้าสู่ระบบก่อนเขียนรีวิว');
+                showToast('info', 'กรุณาเข้าสู่ระบบก่อนเขียนรีวิว');
                 toggleLogin();
             };
 
@@ -585,7 +610,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 newReview.rating = 0;
                 newReview.comment = '';
                 navigate('home'); // กลับไปหน้าแรกเสมอเพื่อความปลอดภัย
-                alert('ออกจากระบบเรียบร้อยแล้ว');
+                showToast('success', 'ออกจากระบบเรียบร้อยแล้ว');
             };
 
             const setRating = (n) => {
@@ -596,7 +621,6 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 // 4. ตรวจสอบซ้ำฝั่ง logic ไม่ให้พึ่งแค่ v-if ใน template
             const submitReview = async () => {
                 if (isAuthLoading.value) {
-                    alert('กรุณารอสักครู่ กำลังตรวจสอบสถานะการเข้าสู่ระบบ');
                     return;
                 }
                 if (!currentUser.value) {
@@ -607,11 +631,11 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 if (isSubmittingReview.value) return;
 
                 if (newReview.rating === 0) {
-                    alert('กรุณาให้คะแนนดาวก่อนส่งรีวิว');
+                    showToast('error', 'กรุณาให้คะแนนดาวก่อนส่งรีวิว');
                     return;
                 }
                 if (!newReview.comment.trim()) {
-                    alert('กรุณาเขียนรีวิวของคุณก่อนส่ง');
+                    showToast('error', 'กรุณาเขียนรีวิวของคุณก่อนส่ง');
                     return;
                 }
 
@@ -639,10 +663,10 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
                     newReview.rating = 0;
                     newReview.comment = '';
-                    alert('บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณครับ!');
+                    showToast('success', 'บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณครับ!');
                 } catch (err) {
                     console.error('Error submitting review:', err);
-                    alert('เกิดข้อผิดพลาดในการบันทึกรีวิว กรุณาลองใหม่อีกครั้ง');
+                    showToast('error', 'เกิดข้อผิดพลาดในการบันทึกรีวิว กรุณาลองใหม่อีกครั้ง');
                 } finally {
                     isSubmittingReview.value = false;
                 }
@@ -665,6 +689,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 currentUser,
                 isAuthLoading,
                 isSubmittingReview,
+                toast,
+                showToast,
                 categories,
                 shops,
                 filteredShops,
