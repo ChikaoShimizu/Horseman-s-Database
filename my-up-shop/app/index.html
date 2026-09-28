@@ -203,7 +203,7 @@
                                         <h3 class="text-xl font-bold text-gray-800 line-clamp-1 group-hover:text-upPurple transition-colors">{{ shop.name }}</h3>
                                         <div class="flex items-center bg-yellow-50 px-2 py-1 rounded border border-yellow-100">
                                             <i class="fa-solid fa-star text-upGold text-sm mr-1"></i>
-                                            <span class="font-bold text-gray-800 text-sm">{{ shop.rating.toFixed(1) }}</span>
+                                            <span class="font-bold text-gray-800 text-sm">{{ formatRating(shop.rating) }}</span>
                                         </div>
                                     </div>
                                     <p class="text-gray-500 text-sm mb-4 line-clamp-2"><i class="fa-solid fa-quote-left text-gray-300 mr-1"></i> {{ shop.description }}</p>
@@ -251,7 +251,7 @@
                             
                             <div class="flex flex-col items-end">
                                 <div class="text-3xl font-bold text-gray-800 flex items-center">
-                                    {{ selectedShop.rating.toFixed(1) }} <i class="fa-solid fa-star text-upGold ml-2 text-2xl"></i>
+                                    {{ formatRating(selectedShop.rating) }} <i class="fa-solid fa-star text-upGold ml-2 text-2xl"></i>
                                 </div>
                                 <span class="text-gray-500 text-sm mt-1">จาก {{ selectedShop.reviews.length }} รีวิว</span>
                             </div>
@@ -327,11 +327,18 @@
                                     
                                     <!-- Review List -->
                                     <div class="space-y-4">
-                                        <div v-for="review in selectedShop.reviews" :key="review.id" class="border-b border-gray-100 pb-4 last:border-0">
+                                        <div v-if="isLoadingReviews" class="text-center py-6 text-gray-500 text-sm">
+                                            <i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังโหลดรีวิวจากระบบ...
+                                        </div>
+                                        <div v-else-if="!selectedShop.reviews || selectedShop.reviews.length === 0" class="text-center py-6 bg-white rounded-xl border border-dashed border-gray-200">
+                                            <i class="fa-regular fa-comment-dots text-3xl text-gray-300 mb-2"></i>
+                                            <p class="text-gray-500 font-medium">ยังไม่มีรีวิว เป็นคนแรกที่รีวิวร้านนี้!</p>
+                                        </div>
+                                        <div v-for="review in selectedShop.reviews" v-if="!isLoadingReviews && selectedShop.reviews && selectedShop.reviews.length > 0" :key="review.id" class="border-b border-gray-100 pb-4 last:border-0">
                                             <div class="flex justify-between items-start mb-2">
                                                 <div class="flex items-center gap-3">
                                                     <div class="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-upPurple font-bold">
-                                                        {{ review.user.charAt(0) }}
+                                                        {{ (review.user || 'ผู้ใช้').charAt(0) }}
                                                     </div>
                                                     <div>
                                                         <div class="font-bold text-gray-800">{{ review.user }}</div>
@@ -486,6 +493,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             const currentUser = ref(null); 
             const isAuthLoading = ref(true);
             const isSubmittingReview = ref(false);
+            const isLoadingReviews = ref(false);
             const selectedShop = ref(null);
             const newReview = reactive({ rating: 0, comment: '' });
             const toast = reactive({ show: false, type: 'info', message: '' });
@@ -511,6 +519,30 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     const data = await response.json();
                     shops.value = data.shops;
                     categories.value = data.categories;
+                    // ดึงเรตติ้งเฉลี่ยจริงจากตาราง Review (query เดียว) มาแทนเลข mock — ร้านไหนยังไม่มีรีวิวใน DB ให้คงค่า fallback จาก data.json ไว้
+                    try {
+                        const { data: allReviews, error: aggError } = await supabaseClient
+                            .from('Review')
+                            .select('ReviewShop, ReviewRating');
+                        if (aggError) throw aggError;
+                        const sumMap = {}, countMap = {};
+                        (allReviews || []).forEach(r => {
+                            const sid = Number(r.ReviewShop);
+                            const rate = Number(r.ReviewRating);
+                            if (!Number.isInteger(sid) || !Number.isFinite(rate)) return;
+                            sumMap[sid] = (sumMap[sid] || 0) + rate;
+                            countMap[sid] = (countMap[sid] || 0) + 1;
+                        });
+                        shops.value.forEach(s => {
+                            const sid = getShopId(s);
+                            if (sid !== null && countMap[sid] > 0) {
+                                s.rating = sumMap[sid] / countMap[sid];
+                            }
+                            if (typeof s.rating !== 'number' || !Number.isFinite(s.rating)) s.rating = 0;
+                        });
+                    } catch (aggErr) {
+                        console.warn('Load review averages failed, using fallback ratings:', aggErr);
+                    }
                 } catch (error) {
                     console.error("Error loading data:", error);
                     showToast('error', 'เกิดข้อผิดพลาดในการโหลดข้อมูลร้านค้า');
@@ -582,9 +614,104 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 searchQuery.value = '';
             };
 
-            const viewShopDetail = (shop) => {
+            const viewShopDetail = async (shop) => {
                 selectedShop.value = shop;
+                if (!Array.isArray(selectedShop.value.reviews)) selectedShop.value.reviews = [];
+                if (typeof selectedShop.value.rating !== 'number' || !Number.isFinite(selectedShop.value.rating)) selectedShop.value.rating = 0;
+                newReview.rating = 0;
+                newReview.comment = '';
                 navigate('detail');
+                await loadShopReviews();
+            };
+
+            // helper: รหัสร้านตัวเลขสำหรับคอลัมน์ Review.ReviewShop (รองรับทั้ง ShopID จาก DB และ id จาก data.json)
+            const getShopId = (shop) => {
+                const raw = shop?.ShopID ?? shop?.id;
+                const n = Number(raw);
+                return Number.isInteger(n) ? n : null;
+            };
+
+            // helper: แสดงคะแนนแบบกันพัง (ไม่มีรีวิวโชว์ – แทน toFixed ตรงๆ ที่ crash ถ้า rating เป็น null)
+            const formatRating = (r) => {
+                const n = Number(r);
+                return Number.isFinite(n) && n > 0 ? n.toFixed(1) : '–';
+            };
+
+            const formatReviewDate = (iso) => {
+                if (!iso) return '';
+                try {
+                    return new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+                } catch {
+                    return '';
+                }
+            };
+
+            const calcAvg = (reviews) => {
+                if (!reviews || reviews.length === 0) return 0;
+                const sum = reviews.reduce((s, r) => s + (Number(r.rating) || 0), 0);
+                return sum / reviews.length;
+            };
+
+            // แปลง email (Supabase Auth) เป็น UserID ตัวเลข (ตาราง User) สำหรับคอลัมน์ Review.ReviewUser
+            const resolveDbUserId = async (email) => {
+                const { data, error } = await supabaseClient
+                    .from('User')
+                    .select('UserID')
+                    .eq('UserEmail', email)
+                    .limit(1);
+                if (error) throw error;
+                if (!data || data.length === 0) return null;
+                return data[0].UserID;
+            };
+
+            // ดึงรีวิวของร้านจาก DB + join ชื่อผู้ใช้จากตาราง User (2 query กันพังถ้า FK ไม่ได้ตั้งชื่อมาตรฐาน)
+            const fetchShopReviews = async (shopId) => {
+                const { data, error } = await supabaseClient
+                    .from('Review')
+                    .select('ReviewID, ReviewRating, ReviewComment, ReviewCreatedAt, ReviewUser')
+                    .eq('ReviewShop', shopId)
+                    .order('ReviewCreatedAt', { ascending: false });
+                if (error) throw error;
+                const rows = data || [];
+                const userMap = {};
+                const userIds = [...new Set(rows.map(r => r.ReviewUser).filter(v => v !== null && v !== undefined))];
+                if (userIds.length > 0) {
+                    const { data: users, error: userError } = await supabaseClient
+                        .from('User')
+                        .select('UserID, Username')
+                        .in('UserID', userIds);
+                    if (userError) throw userError;
+                    (users || []).forEach(u => { userMap[u.UserID] = u.Username || 'ผู้ใช้'; });
+                }
+                return rows.map(r => ({
+                    id: r.ReviewID,
+                    user: userMap[r.ReviewUser] || 'ผู้ใช้',
+                    rating: Number(r.ReviewRating) || 0,
+                    comment: r.ReviewComment || '-',
+                    date: formatReviewDate(r.ReviewCreatedAt)
+                }));
+            };
+
+            // โหลดรีวิวจาก DB แล้วคำนวณเฉลี่ยทับลงหน้าร้าน (แทนเลข mock)
+            const loadShopReviews = async () => {
+                const shop = selectedShop.value;
+                if (!shop) return;
+                const shopId = getShopId(shop);
+                if (shopId === null) {
+                    showToast('error', 'ไม่พบรหัสร้านค้าในระบบ');
+                    return;
+                }
+                isLoadingReviews.value = true;
+                try {
+                    const reviews = await fetchShopReviews(shopId);
+                    shop.reviews = reviews;
+                    shop.rating = calcAvg(reviews);
+                } catch (err) {
+                    console.error('Error loading reviews:', err);
+                    showToast('error', 'โหลดรีวิวจากระบบไม่สำเร็จ: ' + (err.message || ''));
+                } finally {
+                    isLoadingReviews.value = false;
+                }
             };
 
             const toggleLogin = () => {
@@ -641,28 +768,38 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
                 isSubmittingReview.value = true;
                 try {
-                    await new Promise((resolve) => setTimeout(resolve, 300));
-
-                    // เช็คซ้ำก่อนบันทึกจริง กันเผยแพร่ระวัง session หมดอายุระหว่างพิมพ์
+                    // เช็คซ้ำก่อนบันทึกจริง กันกรณี session หมดอายุระหว่างพิมพ์
                     if (!currentUser.value) {
                         requireLogin();
                         return;
                     }
 
-                    selectedShop.value.reviews.unshift({
-                        id: Date.now(),
-                        user: currentUser.value.name,
-                        userEmail: currentUser.value.email,
-                        rating: newReview.rating,
-                        comment: newReview.comment.trim(),
-                        date: 'เพิ่งรีวิว'
-                    });
+                    const shopId = getShopId(selectedShop.value);
+                    if (shopId === null) {
+                        showToast('error', 'ไม่พบรหัสร้านค้าในระบบ');
+                        return;
+                    }
+                    const userId = await resolveDbUserId(currentUser.value.email);
+                    if (userId === null) {
+                        showToast('error', 'ไม่พบข้อมูลผู้ใช้ในระบบ กรุณาสมัครสมาชิกใหม่หรือติดต่อแอดมิน');
+                        return;
+                    }
 
-                    const totalRating = selectedShop.value.reviews.reduce((sum, rev) => sum + rev.rating, 0);
-                    selectedShop.value.rating = totalRating / selectedShop.value.reviews.length;
+                    // 2. บันทึกรีวิวลงตาราง Review (ReviewShop/ReviewUser/ReviewRating/ReviewComment)
+                    const { error: insertError } = await supabaseClient
+                        .from('Review')
+                        .insert([{
+                            ReviewShop: shopId,
+                            ReviewUser: userId,
+                            ReviewRating: newReview.rating,
+                            ReviewComment: newReview.comment.trim()
+                        }]);
+                    if (insertError) throw insertError;
 
                     newReview.rating = 0;
                     newReview.comment = '';
+                    // 3. ดึงรีวิวจาก DB ใหม่แล้วคำนวณเฉลี่ยทับหน้าร้าน (แทนเลข mock)
+                    await loadShopReviews();
                     showToast('success', 'บันทึกรีวิวเรียบร้อยแล้ว ขอบคุณครับ!');
                 } catch (err) {
                     console.error('Error submitting review:', err);
@@ -689,6 +826,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 currentUser,
                 isAuthLoading,
                 isSubmittingReview,
+                isLoadingReviews,
                 toast,
                 showToast,
                 categories,
@@ -700,6 +838,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 navigate,
                 selectCategory,
                 viewShopDetail,
+                loadShopReviews,
+                formatRating,
                 toggleLogin,
                 logout,
                 setRating,
