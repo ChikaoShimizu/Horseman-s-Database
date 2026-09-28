@@ -176,7 +176,8 @@
                         const { error: insertError } = await supabaseClient.from('User').insert([{
                             UserEmail: form.email,
                             Username: form.name,
-                            UserPassword: encryptedPassword
+                            UserPassword: encryptedPassword,
+                            role: role.value
                         }]);
 
                         if (insertError) {
