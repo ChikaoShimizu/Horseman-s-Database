@@ -509,7 +509,46 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
             const categories = ref([]);
             const shops = ref([]);
-            const isLoading = ref(true); 
+            const isLoading = ref(true);
+
+            // จุดอ้างอิง "หน้ามอ" สำหรับคำนวณระยะทางชั่วคราว (ข้อ 10 จะเปลี่ยนเป็น GPS ผู้ใช้จริง)
+            const UNI_LAT = 19.0284, UNI_LNG = 99.8941;
+            const FALLBACK_IMG = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
+            const haversineM = (lat1, lng1, lat2, lng2) => {
+                const R = 6371000, toRad = (d) => d * Math.PI / 180;
+                const a = Math.sin(toRad(lat2 - lat1) / 2) ** 2
+                    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lng2 - lng1) / 2) ** 2;
+                return 2 * R * Math.asin(Math.sqrt(a));
+            };
+            const formatDistance = (m) => m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`;
+            const parseLocation = (loc) => {
+                const parts = String(loc || '').split(',');
+                const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+                return { lat: Number.isFinite(lat) ? lat : null, lng: Number.isFinite(lng) ? lng : null };
+            };
+            const parseOperatingNote = (note) => {
+                const m = String(note || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+                return m ? [m[1], m[2]] : ['', ''];
+            };
+            // แปลงแถวตาราง Shop เป็น shape เดียวกับการ์ดหน้า Home
+            const normalizeDbShop = (r, catNameById, coverMap) => {
+                const { lat, lng } = parseLocation(r.ShopLocation);
+                const [openTime, closeTime] = parseOperatingNote(r.ShopOperatingNote);
+                let distance = '–';
+                if (lat !== null && lng !== null) distance = formatDistance(haversineM(UNI_LAT, UNI_LNG, lat, lng));
+                return {
+                    id: r.ShopID, ShopID: r.ShopID,
+                    name: r.ShopName || '(ไม่มีชื่อร้าน)',
+                    category: catNameById[Number(r.ShopCategoryId)] || '-',
+                    description: r.ShopDescription || '',
+                    image: coverMap[r.ShopID] || FALLBACK_IMG,
+                    isOpen: r.ShopManualStatus ?? true,
+                    openTime, closeTime,
+                    priceRange: r.ShopAvgPrice != null ? `฿${r.ShopAvgPrice}` : '–',
+                    distance, lat: lat ?? '', lng: lng ?? '',
+                    rating: 0, reviews: [], approvalStatus: 'Approved'
+                };
+            };
 
             const loadData = async () => {
                 try {
@@ -519,6 +558,36 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     const data = await response.json();
                     shops.value = data.shops;
                     categories.value = data.categories;
+                    // AC3: ผูกสถานะอนุมัติจาก DB เข้ากับ seed + เติมร้าน Approved ที่ไม่มีใน seed (เช่นร้านที่ owner เพิ่งสร้าง)
+                    try {
+                        const { data: dbShops, error: dbErr } = await supabaseClient
+                            .from('Shop')
+                            .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopLocation, ShopManualStatus, ShopOperatingNote, ShopApprovalStatus, ShopAvgPrice');
+                        if (dbErr) throw dbErr;
+                        const catNameById = {};
+                        (categories.value || []).forEach(c => { catNameById[Number(c.id)] = c.name; });
+                        const { data: covers } = await supabaseClient
+                            .from('Shop_Image')
+                            .select('ShopID, ShopImageURL')
+                            .eq('ShopIsCover', true);
+                        const coverMap = {};
+                        (covers || []).forEach(c => { if (!coverMap[c.ShopID]) coverMap[c.ShopID] = c.ShopImageURL; });
+                        const statusMap = {};
+                        const seedIds = new Set(shops.value.map(s => Number(s.id)));
+                        const extras = [];
+                        (dbShops || []).forEach(r => {
+                            const sid = Number(r.ShopID);
+                            const st = r.ShopApprovalStatus || 'Approved';
+                            statusMap[sid] = st;
+                            if (st === 'Approved' && !seedIds.has(sid)) {
+                                extras.push(normalizeDbShop(r, catNameById, coverMap));
+                            }
+                        });
+                        shops.value.forEach(s => { s.approvalStatus = statusMap[Number(s.id)] || 'Approved'; });
+                        if (extras.length > 0) shops.value = shops.value.concat(extras);
+                    } catch (dbErr) {
+                        console.warn('Load shop approval statuses failed, showing seeds only:', dbErr);
+                    }
                     // ดึงเรตติ้งเฉลี่ยจริงจากตาราง Review (query เดียว) มาแทนเลข mock — ร้านไหนยังไม่มีรีวิวใน DB ให้คงค่า fallback จาก data.json ไว้
                     try {
                         const { data: allReviews, error: aggError } = await supabaseClient
@@ -811,6 +880,9 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
             const filteredShops = computed(() => {
                 return shops.value.filter(shop => {
+                    // AC3 (ชั่วคราว): ซ่อนร้านที่ถูกปฏิเสธ — seed จาก data.json ถือว่า Approved จนกว่าจะย้าย Home มาอ่านตาราง Shop
+                    const approval = shop.approvalStatus || shop.ShopApprovalStatus || 'Approved';
+                    if (approval === 'Rejected' || approval === 'Pending') return false;
                     const matchText = shop.name.includes(searchQuery.value) || shop.category.includes(searchQuery.value);
                     const matchCat = searchCategory.value === '' || shop.category === searchCategory.value;
                     const matchStatus = filterOpenNow.value ? shop.isOpen : true;

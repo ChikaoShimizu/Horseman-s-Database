@@ -30,6 +30,9 @@
     <!-- Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 
+    <!-- Supabase (ใช้คีย์เดียวกับ login.html / Register.html / index.html) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; }
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
@@ -107,15 +110,22 @@
                         </tr>
                     </thead>
                     <tbody class="text-sm text-slate-700">
+                        <!-- กำลังโหลดจากระบบ -->
+                        <tr v-if="isLoadingShops">
+                            <td colspan="5" class="p-8 text-center text-slate-400">
+                                <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 text-upPurple block"></i>
+                                กำลังโหลดรายการรออนุมัติ...
+                            </td>
+                        </tr>
                         <!-- กรณีไม่มีคำขอ -->
-                        <tr v-if="pendingShops.length === 0">
+                        <tr v-else-if="pendingShops.length === 0">
                             <td colspan="5" class="p-8 text-center text-slate-400">
                                 <i class="fa-solid fa-check-circle text-4xl mb-2 text-green-400 block"></i>
                                 ไม่มีคำขอเปิดร้านใหม่ในขณะนี้
                             </td>
                         </tr>
-                        <!-- กรณีมีคำขอ (ใช้ v-for วนลูปข้อมูลจำลอง) -->
-                        <tr v-for="shop in pendingShops" :key="shop.id" class="border-b hover:bg-slate-50 transition">
+                        <!-- รายการรออนุมัติจากระบบ (ShopApprovalStatus = Pending) -->
+                        <tr v-else v-for="shop in pendingShops" :key="shop.id" class="border-b hover:bg-slate-50 transition">
                             <td class="p-4 font-bold text-slate-800">{{ shop.name }}</td>
                             <td class="p-4">
                                 <span class="bg-purple-100 text-upPurple px-2 py-1 rounded text-xs font-medium">{{ shop.category }}</span>
@@ -176,21 +186,106 @@
 </div>
 
 <script>
-    const { createApp, ref, reactive } = Vue;
+    const { createApp, ref, reactive, onMounted } = Vue;
+
+    // เชื่อมต่อ Supabase (ใช้ Key เดียวกับหน้าอื่น)
+    const supabaseUrl = 'https://kmebinvqehwomycufvlj.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZWJpbnZxZWh3b215Y3VmdmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDc5ODMsImV4cCI6MjEwMjc4Mzk4M30.TWGUBnYcoBovJ34q1hhV-yJ8vV-e2sG3tECXOH-HEs4';
+    const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
     createApp({
         setup() {
-            // จำลองข้อมูลสถิติ
+            // สถิติจริงจาก DB (การ์ดสแปมไม่มีตารางรองรับ คงเลข mock ไว้ก่อน)
             const stats = reactive({
-                totalShops: 124,
-                totalUsers: '1,540',
+                totalShops: 0,
+                totalUsers: 0,
                 spamReviews: 2
             });
+            const isLoadingShops = ref(true);
 
-            // จำลองข้อมูลร้านที่รออนุมัติ
-            const pendingShops = ref([
-                { id: 1, name: 'ป้าศรี ตามสั่ง', category: 'อาหาร', ownerName: 'สมหญิง รักดี (Owner)', requestDate: '12 ต.ค. 2569' },
-                { id: 2, name: 'หอพัก บ้านอุ่นใจ', category: 'หอพัก', ownerName: 'มานะ อดทน (Owner)', requestDate: '11 ต.ค. 2569' }
-            ]);
+            // ร้านที่รอการอนุมัติ (โหลดจากตาราง Shop สถานะ Pending)
+            const pendingShops = ref([]);
+
+            const formatRequestDate = (iso) => {
+                if (!iso) return '-';
+                try {
+                    return new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+                } catch {
+                    return '-';
+                }
+            };
+
+            // AC1: ดึงร้านที่ ShopApprovalStatus = 'Pending' มาแสดง
+            const loadPendingShops = async () => {
+                isLoadingShops.value = true;
+                try {
+                    const { data: shops, error: shopError } = await supabaseClient
+                        .from('Shop')
+                        .select('ShopID, ShopName, ShopCategoryId, ShopCreatedAt')
+                        .eq('ShopApprovalStatus', 'Pending')
+                        .order('ShopCreatedAt', { ascending: true });
+                    if (shopError) throw shopError;
+
+                    const rows = shops || [];
+                    // ชื่อหมวดจากตาราง Category
+                    let categoryMap = {};
+                    const categoryIds = [...new Set(rows.map(r => r.ShopCategoryId).filter(v => v !== null && v !== undefined))];
+                    if (categoryIds.length > 0) {
+                        const { data: categories, error: catError } = await supabaseClient
+                            .from('Category')
+                            .select('CategoryId, CategoryName')
+                            .in('CategoryId', categoryIds);
+                        if (catError) throw catError;
+                        (categories || []).forEach(c => { categoryMap[c.CategoryId] = c.CategoryName; });
+                    }
+                    // ชื่อผู้ขอจากตาราง User (ผูกผ่าน UserShopID = ShopID)
+                    let ownerMap = {};
+                    const shopIds = rows.map(r => r.ShopID);
+                    if (shopIds.length > 0) {
+                        const { data: owners, error: ownerError } = await supabaseClient
+                            .from('User')
+                            .select('UserShopID, Username')
+                            .in('UserShopID', shopIds);
+                        if (ownerError) throw ownerError;
+                        (owners || []).forEach(u => { ownerMap[u.UserShopID] = u.Username; });
+                    }
+
+                    pendingShops.value = rows.map(r => ({
+                        id: r.ShopID,
+                        name: r.ShopName || '(ไม่มีชื่อร้าน)',
+                        category: categoryMap[r.ShopCategoryId] || '-',
+                        ownerName: ownerMap[r.ShopID] ? `${ownerMap[r.ShopID]} (Owner)` : '-',
+                        requestDate: formatRequestDate(r.ShopCreatedAt)
+                    }));
+                } catch (err) {
+                    console.error('Error loading pending shops:', err);
+                    showToast('error', 'โหลดรายการรออนุมัติไม่สำเร็จ: ' + (err.message || ''));
+                } finally {
+                    isLoadingShops.value = false;
+                }
+            };
+
+            const loadStats = async () => {
+                try {
+                    const { count: shopCount, error: shopErr } = await supabaseClient
+                        .from('Shop')
+                        .select('ShopID', { count: 'exact', head: true });
+                    if (shopErr) throw shopErr;
+                    const { count: userCount, error: userErr } = await supabaseClient
+                        .from('User')
+                        .select('UserID', { count: 'exact', head: true });
+                    if (userErr) throw userErr;
+                    stats.totalShops = shopCount ?? 0;
+                    stats.totalUsers = userCount ?? 0;
+                } catch (err) {
+                    console.error('Error loading stats:', err);
+                }
+            };
+
+            onMounted(() => {
+                loadPendingShops();
+                loadStats();
+            });
 
             const toast = reactive({ show: false, type: 'success', message: '' });
             let toastTimer = null;
@@ -220,7 +315,7 @@
                 closeConfirm();
             };
 
-            // ฟังก์ชันอนุมัติร้าน
+            // AC2: อนุมัติร้าน (ประทับ Approved ลง DB)
             const approveShop = (id) => {
                 const shop = pendingShops.value.find(s => s.id === id);
                 openConfirm({
@@ -228,25 +323,56 @@
                     message: shop ? `อนุมัติร้าน "${shop.name}" ลงในระบบใช่หรือไม่?` : 'ยืนยันการอนุมัติร้านค้านี้ลงในระบบ?',
                     confirmText: 'อนุมัติ',
                     danger: false,
-                    action: () => {
-                        pendingShops.value = pendingShops.value.filter(s => s.id !== id);
-                        stats.totalShops++;
-                        showToast('success', 'อนุมัติร้านค้าเรียบร้อยแล้ว');
+                    action: async () => {
+                        try {
+                            // verify ว่า DB บันทึกจริง (RLS ที่ไม่มี UPDATE policy จะสำเร็จหลอกโดยได้ 0 แถว)
+                            const { data: updated, error } = await supabaseClient
+                                .from('Shop')
+                                .update({ ShopApprovalStatus: 'Approved' })
+                                .eq('ShopID', id)
+                                .select('ShopID');
+                            if (error) throw error;
+                            if (!updated || updated.length === 0) {
+                                throw new Error('DB ไม่ได้บันทึก (0 แถว) — ตรวจ RLS UPDATE ของตาราง Shop');
+                            }
+                            pendingShops.value = pendingShops.value.filter(s => s.id !== id);
+                            loadStats();
+                            showToast('success', 'อนุมัติร้านค้าเรียบร้อยแล้ว');
+                        } catch (err) {
+                            console.error('Error approving shop:', err);
+                            showToast('error', 'อนุมัติไม่สำเร็จ: ' + (err.message || ''));
+                        }
                     }
                 });
             };
 
-            // ฟังก์ชันปฏิเสธร้าน
+            // ปฏิเสธร้าน (ประทับ Rejected คงแถวไว้ตรวจสอบย้อนหลัง — ไม่แสดงในหน้า Home ตาม AC3)
             const rejectShop = (id) => {
                 const shop = pendingShops.value.find(s => s.id === id);
                 openConfirm({
                     title: 'ยืนยันการปฏิเสธ',
-                    message: shop ? `ปฏิเสธและลบคำขอของร้าน "${shop.name}" ใช่หรือไม่?` : 'คุณต้องการปฏิเสธและลบคำขอนี้ใช่หรือไม่?',
+                    message: shop ? `ปฏิเสธคำขอของร้าน "${shop.name}" ใช่หรือไม่? (สถานะจะถูกบันทึกเป็น Rejected)` : 'คุณต้องการปฏิเสธคำขอนี้ใช่หรือไม่?',
                     confirmText: 'ปฏิเสธ',
                     danger: true,
-                    action: () => {
-                        pendingShops.value = pendingShops.value.filter(s => s.id !== id);
-                        showToast('success', 'ปฏิเสธคำขอเรียบร้อยแล้ว');
+                    action: async () => {
+                        try {
+                            // verify ว่า DB บันทึกจริง (RLS ที่ไม่มี UPDATE policy จะสำเร็จหลอกโดยได้ 0 แถว)
+                            const { data: updated, error } = await supabaseClient
+                                .from('Shop')
+                                .update({ ShopApprovalStatus: 'Rejected' })
+                                .eq('ShopID', id)
+                                .select('ShopID');
+                            if (error) throw error;
+                            if (!updated || updated.length === 0) {
+                                throw new Error('DB ไม่ได้บันทึก (0 แถว) — ตรวจ RLS UPDATE ของตาราง Shop');
+                            }
+                            pendingShops.value = pendingShops.value.filter(s => s.id !== id);
+                            loadStats();
+                            showToast('success', 'ปฏิเสธคำขอเรียบร้อยแล้ว (บันทึกสถานะ Rejected)');
+                        } catch (err) {
+                            console.error('Error rejecting shop:', err);
+                            showToast('error', 'ปฏิเสธไม่สำเร็จ: ' + (err.message || ''));
+                        }
                     }
                 });
             };
@@ -257,7 +383,7 @@
                 window.location.href = 'index.html';
             };
 
-            return { stats, pendingShops, approveShop, rejectShop, logout, toast, showToast, confirmModal, openConfirm, closeConfirm, confirmAction }
+            return { stats, pendingShops, isLoadingShops, loadPendingShops, approveShop, rejectShop, logout, toast, showToast, confirmModal, openConfirm, closeConfirm, confirmAction }
         }
     }).mount('#app');
 </script>

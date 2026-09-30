@@ -298,7 +298,25 @@
                         .select(); 
 
                     if (shopError) throw shopError;
-                    
+
+                    // ผูกเจ้าของกับร้าน (ให้หน้า Admin โชว์ชื่อคนขอได้ผ่าน User.UserShopID) — ล้มเหลวไม่บล็อกการสร้างร้าน
+                    try {
+                        const newShopId = shopData?.[0]?.ShopID ?? null;
+                        if (newShopId !== null) {
+                            const { data: userData } = await supabaseClient.auth.getUser();
+                            const email = userData?.user?.email || localStorage.getItem('userEmail');
+                            if (email) {
+                                const { error: linkError } = await supabaseClient
+                                    .from('User')
+                                    .update({ UserShopID: newShopId })
+                                    .eq('UserEmail', email);
+                                if (linkError) console.warn('Link shop to owner failed:', linkError);
+                            }
+                        }
+                    } catch (linkErr) {
+                        console.warn('Link shop to owner failed:', linkErr);
+                    }
+
                     // ปิดส่วนอัปโหลดรูปภาพไว้ชั่วคราว เพื่อทดสอบการบันทึกฐานข้อมูล
                     /*
                     const newShopId = shopData[0].ShopID; 
