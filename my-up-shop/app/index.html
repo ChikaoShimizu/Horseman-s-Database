@@ -451,11 +451,14 @@
                                                 <i class="fa-solid fa-location-crosshairs text-upPurple"></i>
                                                 <span class="text-xs text-gray-500">ตำแหน่งของคุณ</span>
                                             </div>
-                                            <div v-if="geoStatus === 'loading'" class="text-sm text-gray-400 mt-1">
-                                                <i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังหาตำแหน่ง...
-                                            </div>
-                                            <div v-else-if="hasShopCoords(selectedShop) && userLocation" class="text-xl font-bold text-upPurple mt-1">
+                                            <div v-if="hasShopCoords(selectedShop) && userLocation" class="text-xl font-bold text-upPurple mt-1">
                                                 {{ getDistanceText(selectedShop) }}
+                                                <span v-if="geoStatus === 'loading'" class="block text-xs font-normal text-gray-400">
+                                                    <i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังอัปเดตตำแหน่ง...
+                                                </span>
+                                            </div>
+                                            <div v-else-if="geoStatus === 'loading'" class="text-sm text-gray-400 mt-1">
+                                                <i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังหาตำแหน่ง...
                                             </div>
                                             <div v-else class="text-sm text-gray-400 mt-1">{{ getMessage(selectedShop) }}</div>
                                         </div>
@@ -630,10 +633,42 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 'insecure': 'ต้องเปิดผ่าน HTTPS จึงจะใช้ GPS ได้'
             };
 
+            const GEO_STORAGE_KEY = 'up_user_location';
+            const GEO_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // ตำแหน่งเมื่อวานยังดีกว่าไม่มีเลย
+
             const userLocation = ref(null);
             // เริ่มที่ 'loading' เพราะ onMounted สั่งขอสิทธิ์ทันที ถ้าเริ่มเป็น 'idle' banner จะโผล่เปล่า ๆ ก่อนข้อความเข้ามา
             const geoStatus = ref('loading');
             const geoMessage = ref(GEO_LABEL.loading);
+
+            // ตำแหน่งรอบก่อนจาก cache — เอามาโชว์ทันทีระหว่างรอ GPS รอบใหม่ จะได้ไม่หมุนค้าง / ไม่กระพริบ
+            const restoreCachedLocation = () => {
+                try {
+                    const raw = localStorage.getItem(GEO_STORAGE_KEY);
+                    if (!raw) return false;
+                    const cached = JSON.parse(raw);
+                    if (!Number.isFinite(cached?.lat) || !Number.isFinite(cached?.lng)) return false;
+                    if (cached.lat < -90 || cached.lat > 90 || cached.lng < -180 || cached.lng > 180) return false;
+                    if (cached.t && Date.now() - cached.t > GEO_CACHE_MAX_AGE) return false;
+                    userLocation.value = { lat: cached.lat, lng: cached.lng };
+                    return true;
+                } catch {
+                    return false;
+                }
+            };
+
+            const saveCachedLocation = (lat, lng) => {
+                try {
+                    localStorage.setItem(GEO_STORAGE_KEY, JSON.stringify({ lat, lng, t: Date.now() }));
+                } catch {
+                    // private mode / พื้นที่เต็ม — ข้ามไป ใช้แค่รอบนี้
+                }
+            };
+
+            if (restoreCachedLocation()) {
+                geoStatus.value = 'granted';
+                geoMessage.value = GEO_LABEL.granted;
+            }
 
             const geoErrorText = (code) => {
                 if (code === 1) return GEO_LABEL.denied;
@@ -692,37 +727,73 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 return `https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}`;
             };
 
+            let geoInFlight = false;
             const requestLocation = () => {
+                if (geoInFlight) return;
+                // ไม่มีของเก่าเลยถึงโชว์ error — ถ้ามี cache อยู่แล้วให้ใช้ต่อเงียบ ๆ ไม่กระพริบ banner
+                const failSilent = () => { recalcDistances(); };
                 if (!('geolocation' in navigator)) {
+                    if (userLocation.value) { failSilent(); return; }
                     geoStatus.value = 'unavailable';
                     geoMessage.value = GEO_LABEL.unavailable;
                     recalcDistances();
                     return;
                 }
                 if (window.isSecureContext === false) {
+                    if (userLocation.value) { failSilent(); return; }
                     geoStatus.value = 'insecure';
                     geoMessage.value = GEO_LABEL.insecure;
                     recalcDistances();
                     return;
                 }
-                if (geoStatus.value === 'loading') return;
-                geoStatus.value = 'loading';
-                geoMessage.value = GEO_LABEL.loading;
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                        geoStatus.value = 'granted';
-                        geoMessage.value = GEO_LABEL.granted;
-                        recalcDistances();
-                    },
-                    (err) => {
-                        userLocation.value = null;
-                        geoStatus.value = err.code === 1 ? 'denied' : 'unavailable';
-                        geoMessage.value = geoErrorText(err.code);
-                        recalcDistances();
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-                );
+                geoInFlight = true;
+                // มีตำแหน่งเก่าแล้ว = รีเฟรชเงียบ ไม่ตีกลับเป็น loading ให้จอกระพริบ
+                if (!userLocation.value) {
+                    geoStatus.value = 'loading';
+                    geoMessage.value = GEO_LABEL.loading;
+                }
+                const onSuccess = (pos) => {
+                    geoInFlight = false;
+                    const lat = pos?.coords?.latitude, lng = pos?.coords?.longitude;
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                        onError({ code: 2 });
+                        return;
+                    }
+                    userLocation.value = { lat, lng };
+                    saveCachedLocation(lat, lng);
+                    geoStatus.value = 'granted';
+                    geoMessage.value = GEO_LABEL.granted;
+                    recalcDistances();
+                };
+                const onError = (err) => {
+                    geoInFlight = false;
+                    if (userLocation.value) { failSilent(); return; }
+                    userLocation.value = null;
+                    geoStatus.value = err?.code === 1 ? 'denied' : 'unavailable';
+                    geoMessage.value = geoErrorText(err?.code);
+                    recalcDistances();
+                };
+                // รอบสองแบบหยาบ (ประหยัดแบต/ทะลุในอาคารได้ดีกว่า) ใช้เฉพาะตอน timeout หรือหาสัญญาณไม่เจอ
+                // ส่วน denied (code 1) ไม่ลองซ้ำ — ถามซ้ำมีแต่กวนผู้ใช้
+                const tryLowAccuracy = () => {
+                    try {
+                        navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+                    } catch {
+                        onError({ code: 2 });
+                    }
+                };
+                try {
+                    navigator.geolocation.getCurrentPosition(
+                        onSuccess,
+                        (err) => {
+                            if (err?.code === 3 || err?.code === 2) tryLowAccuracy();
+                            else onError(err);
+                        },
+                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+                    );
+                } catch {
+                    onError({ code: 2 });
+                }
             };
             const parseOperatingNote = (note) => {
                 const m = String(note || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
