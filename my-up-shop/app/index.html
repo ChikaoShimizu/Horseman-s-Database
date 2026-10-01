@@ -351,6 +351,45 @@
                                                 </div>
                                             </div>
                                             <p class="text-gray-700 pl-13">{{ review.comment }}</p>
+
+                                            <!-- คำตอบของร้าน -->
+                                            <div v-if="review.reply" class="mt-3 ml-13 pl-4 border-l-2 border-upPurple/30 bg-purple-50/40 rounded-r-lg py-2 pr-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <i class="fa-solid fa-store text-upPurple text-xs"></i>
+                                                    <span class="text-xs font-bold text-upPurple">ตอบกลับจากร้าน{{ review.replyUser ? ' (' + review.replyUser + ')' : '' }}</span>
+                                                    <span v-if="review.replyDate" class="text-[10px] text-gray-400 ml-auto">{{ review.replyDate }}</span>
+                                                </div>
+                                                <p class="text-sm text-gray-700 whitespace-pre-line">{{ review.reply }}</p>
+                                            </div>
+
+                                            <!-- ปุ่ม "ตอบกลับ" เฉพาะเจ้าของร้านนี้ -->
+                                            <div class="pl-13 mt-2">
+                                                <button v-if="isShopOwner() && !review.reply" @click="toggleReplyBox(review.id)"
+                                                        class="text-xs font-medium text-upPurple hover:text-upPurple/80 flex items-center gap-1">
+                                                    <i class="fa-solid fa-reply"></i> ตอบกลับ
+                                                </button>
+                                                <button v-else-if="isShopOwner() && review.reply" @click="toggleReplyBox(review.id)"
+                                                        class="text-xs font-medium text-gray-500 hover:text-upPurple flex items-center gap-1">
+                                                    <i class="fa-solid fa-pen"></i> แก้ไขคำตอบ
+                                                </button>
+
+                                                <div v-if="isShopOwner() && openReplyId === review.id" class="mt-2 space-y-2">
+                                                    <textarea v-model="replyDrafts[review.id]" :disabled="submittingReplyId === review.id" rows="2"
+                                                              class="w-full border border-gray-200 rounded-lg p-2 text-sm focus:border-upPurple focus:outline-none"
+                                                              placeholder="ตอบกลับรีวิวนี้..."></textarea>
+                                                    <div class="flex gap-2">
+                                                        <button @click="submitReply(review)" :disabled="submittingReplyId === review.id"
+                                                                class="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-colors"
+                                                                :class="submittingReplyId === review.id ? 'bg-upPurple/50 cursor-not-allowed' : 'bg-upPurple hover:bg-upPurple/90'">
+                                                            {{ submittingReplyId === review.id ? 'กำลังส่ง...' : 'ส่งคำตอบ' }}
+                                                        </button>
+                                                        <button @click="openReplyId = null" :disabled="submittingReplyId === review.id"
+                                                                class="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                                                            ยกเลิก
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -496,6 +535,9 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             const isLoadingReviews = ref(false);
             const selectedShop = ref(null);
             const newReview = reactive({ rating: 0, comment: '' });
+            const replyDrafts = reactive({});
+            const openReplyId = ref(null);
+            const submittingReplyId = ref(null);
             const toast = reactive({ show: false, type: 'info', message: '' });
             let toastTimer = null;
 
@@ -621,7 +663,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             };
 
 // 2. ดึงผู้ใช้จาก Supabase Session จริง (ไม่เชื่อ localStorage ที่แก้เองได้)
-            const buildUser = (user) => {
+            const buildUser = (user, dbRow = null) => {
                 if (!user) return null;
                 const displayName = user.user_metadata?.name
                     || user.user_metadata?.user_name
@@ -630,7 +672,9 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     id: user.id,
                     email: user.email,
                     name: displayName,
-                    role: user.user_metadata?.role || 'user'
+                    role: user.user_metadata?.role || 'user',
+                    dbUserId: dbRow?.UserID ?? null,
+                    userShopId: dbRow?.UserShopID ?? null
                 };
             };
 
@@ -649,20 +693,46 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                         currentUser.value = null;
                         return;
                     }
-                    currentUser.value = buildUser(userData.user);
-                } catch (error) {
-                    console.error('Error resolving session:', error);
-                    currentUser.value = null;
-                } finally {
-                    isAuthLoading.value = false;
-                }
-            };
+                        let dbRow = null;
+                        if (userData.user.email) {
+                            const { data: dbUser, error: dbErr } = await supabaseClient
+                                .from('User')
+                                .select('UserID, UserShopID')
+                                .eq('UserEmail', userData.user.email)
+                                .limit(1);
+                            if (!dbErr && dbUser && dbUser.length > 0) {
+                                dbRow = dbUser[0];
+                            }
+                        }
+                        currentUser.value = buildUser(userData.user, dbRow);
+                    } catch (error) {
+                        console.error('Error resolving session:', error);
+                        currentUser.value = null;
+                    } finally {
+                        isAuthLoading.value = false;
+                    }
+                };
 
-            // คงสถานะให้ตรงกับ session เสมอ (เช่น ออกจากระบบจากแท็บอื่น หรือ token หมดอายุ)
-            const { data: authListener } = supabaseClient.auth.onAuthStateChange((event, session) => {
-                currentUser.value = session?.user ? buildUser(session.user) : null;
-                isAuthLoading.value = false;
-            });
+                // คงสถานะให้ตรงกับ session เสมอ (เช่น ออกจากระบบจากแท็บอื่น หรือ token หมดอายุ)
+                const { data: authListener } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                    if (session?.user) {
+                        let dbRow = null;
+                        if (session.user.email) {
+                            const { data: dbUser, error: dbErr } = await supabaseClient
+                                .from('User')
+                                .select('UserID, UserShopID')
+                                .eq('UserEmail', session.user.email)
+                                .limit(1);
+                            if (!dbErr && dbUser && dbUser.length > 0) {
+                                dbRow = dbUser[0];
+                            }
+                        }
+                        currentUser.value = buildUser(session.user, dbRow);
+                    } else {
+                        currentUser.value = null;
+                    }
+                    isAuthLoading.value = false;
+                });
 
             onMounted(() => {
                 loadData();
@@ -689,6 +759,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 if (typeof selectedShop.value.rating !== 'number' || !Number.isFinite(selectedShop.value.rating)) selectedShop.value.rating = 0;
                 newReview.rating = 0;
                 newReview.comment = '';
+                openReplyId.value = null;
+                Object.keys(replyDrafts).forEach(k => { delete replyDrafts[k]; });
                 navigate('detail');
                 await loadShopReviews();
             };
@@ -734,12 +806,23 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             };
 
             // ดึงรีวิวของร้านจาก DB + join ชื่อผู้ใช้จากตาราง User (2 query กันพังถ้า FK ไม่ได้ตั้งชื่อมาตรฐาน)
+            const REVIEW_BASE_COLS = 'ReviewID, ReviewRating, ReviewComment, ReviewCreatedAt, ReviewUser';
+            const REVIEW_REPLY_COLS = REVIEW_BASE_COLS + ', ReviewReply, ReviewRepliedAt, ReviewReplyUser';
+            let reviewHasReplyCols = true;
+
             const fetchShopReviews = async (shopId) => {
-                const { data, error } = await supabaseClient
+                let query = supabaseClient
                     .from('Review')
-                    .select('ReviewID, ReviewRating, ReviewComment, ReviewCreatedAt, ReviewUser')
+                    .select(reviewHasReplyCols ? REVIEW_REPLY_COLS : REVIEW_BASE_COLS)
                     .eq('ReviewShop', shopId)
                     .order('ReviewCreatedAt', { ascending: false });
+                let { data, error } = await query;
+                // คอลัมน์คำตอบอาจยังไม่ถูกเพิ่มใน DB — ถอยไปอ่านเฉพาะคอลัมน์พื้นฐานแทนที่จะพังทั้งหน้า
+                if (error && reviewHasReplyCols) {
+                    reviewHasReplyCols = false;
+                    console.warn('Review reply columns unavailable, falling back:', error.message);
+                    ({ data, error } = await query);
+                }
                 if (error) throw error;
                 const rows = data || [];
                 const userMap = {};
@@ -752,12 +835,27 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     if (userError) throw userError;
                     (users || []).forEach(u => { userMap[u.UserID] = u.Username || 'ผู้ใช้'; });
                 }
+                const replyUserMap = {};
+                const replyUserIds = [...new Set(rows.map(r => r.ReviewReplyUser).filter(v => v !== null && v !== undefined))];
+                if (replyUserIds.length > 0) {
+                    const { data: rusers, error: ruserError } = await supabaseClient
+                        .from('User')
+                        .select('UserID, Username')
+                        .in('UserID', replyUserIds);
+                    if (!ruserError && rusers) {
+                        rusers.forEach(u => { replyUserMap[u.UserID] = u.Username || 'ผู้ใช้'; });
+                    }
+                }
                 return rows.map(r => ({
                     id: r.ReviewID,
                     user: userMap[r.ReviewUser] || 'ผู้ใช้',
+                    reviewUserId: r.ReviewUser ?? null,
                     rating: Number(r.ReviewRating) || 0,
                     comment: r.ReviewComment || '-',
-                    date: formatReviewDate(r.ReviewCreatedAt)
+                    date: formatReviewDate(r.ReviewCreatedAt),
+                    reply: r.ReviewReply || null,
+                    replyDate: formatReviewDate(r.ReviewRepliedAt),
+                    replyUser: replyUserMap[r.ReviewReplyUser] || null
                 }));
             };
 
@@ -812,6 +910,75 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             const setRating = (n) => {
                 if (!currentUser.value || isSubmittingReview.value) return;
                 newReview.rating = n;
+            };
+
+// เปิดปุ่ม "ตอบกลับ" ให้เฉพาะเจ้าของร้านนั้นจริง ๆ (ผูกผ่าน User.UserShopID === Review.ReviewShop)
+            const isShopOwner = () => {
+                const user = currentUser.value;
+                const shopId = getShopId(selectedShop.value);
+                if (!user || shopId === null) return false;
+                const ownerShopId = Number(user.userShopId);
+                if (!Number.isInteger(ownerShopId)) return false;
+                return ownerShopId === shopId;
+            };
+
+            const toggleReplyBox = (reviewId) => {
+                if (!isShopOwner()) return;
+                openReplyId.value = openReplyId.value === reviewId ? null : reviewId;
+            };
+
+            const submitReply = async (review) => {
+                if (isAuthLoading.value) return;
+                if (!currentUser.value) { requireLogin(); return; }
+                if (!isShopOwner()) {
+                    showToast('error', 'เฉพาะเจ้าของร้านเท่านั้นที่ตอบกลับรีวิวนี้ได้');
+                    return;
+                }
+                if (submittingReplyId.value !== null) return;
+
+                const reviewId = Number(review?.id);
+                if (!Number.isInteger(reviewId)) return;
+
+                const text = (replyDrafts[reviewId] || '').trim();
+                if (!text) {
+                    showToast('error', 'กรุณาพิมพ์คำตอบก่อนส่ง');
+                    return;
+                }
+
+                submittingReplyId.value = reviewId;
+                try {
+                    if (!currentUser.value) { requireLogin(); return; }
+
+                    let ownerUserId = currentUser.value.dbUserId;
+                    if (ownerUserId === null || ownerUserId === undefined) {
+                        ownerUserId = await resolveDbUserId(currentUser.value.email);
+                    }
+                    if (ownerUserId === null || ownerUserId === undefined) {
+                        showToast('error', 'ไม่พบข้อมูลผู้ใช้ในระบบ กรุณาสมัครสมาชิกใหม่หรือติดต่อแอดมิน');
+                        return;
+                    }
+
+                    const { error: updateError } = await supabaseClient
+                        .from('Review')
+                        .update({
+                            ReviewReply: text,
+                            ReviewReplyUser: ownerUserId,
+                            ReviewRepliedAt: new Date().toISOString()
+                        })
+                        .eq('ReviewID', reviewId)
+                        .eq('ReviewShop', getShopId(selectedShop.value));
+                    if (updateError) throw updateError;
+
+                    replyDrafts[reviewId] = '';
+                    openReplyId.value = null;
+                    await loadShopReviews();
+                    showToast('success', 'ตอบกลับรีวิวเรียบร้อยแล้ว');
+                } catch (err) {
+                    console.error('Error replying review:', err);
+                    showToast('error', 'เกิดข้อผิดพลาดในการตอบกลับรีวิว กรุณาลองใหม่อีกครั้ง');
+                } finally {
+                    submittingReplyId.value = null;
+                }
             };
 
 // 4. ตรวจสอบซ้ำฝั่ง logic ไม่ให้พึ่งแค่ v-if ใน template
@@ -899,6 +1066,12 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 isAuthLoading,
                 isSubmittingReview,
                 isLoadingReviews,
+                replyDrafts,
+                openReplyId,
+                submittingReplyId,
+                isShopOwner,
+                toggleReplyBox,
+                submitReply,
                 toast,
                 showToast,
                 categories,
