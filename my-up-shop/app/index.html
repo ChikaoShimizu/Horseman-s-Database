@@ -805,24 +805,15 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 return data[0].UserID;
             };
 
-            // ดึงรีวิวของร้านจาก DB + join ชื่อผู้ใช้จากตาราง User (2 query กันพังถ้า FK ไม่ได้ตั้งชื่อมาตรฐาน)
+            // ดึงรีวิวของร้านจาก DB + คำตอบเจ้าของร้านจากตาราง Review_Replies + join ชื่อผู้ใช้จากตาราง User
             const REVIEW_BASE_COLS = 'ReviewID, ReviewRating, ReviewComment, ReviewCreatedAt, ReviewUser';
-            const REVIEW_REPLY_COLS = REVIEW_BASE_COLS + ', ReviewReply, ReviewRepliedAt, ReviewReplyUser';
-            let reviewHasReplyCols = true;
 
             const fetchShopReviews = async (shopId) => {
-                let query = supabaseClient
+                const { data, error } = await supabaseClient
                     .from('Review')
-                    .select(reviewHasReplyCols ? REVIEW_REPLY_COLS : REVIEW_BASE_COLS)
+                    .select(REVIEW_BASE_COLS)
                     .eq('ReviewShop', shopId)
                     .order('ReviewCreatedAt', { ascending: false });
-                let { data, error } = await query;
-                // คอลัมน์คำตอบอาจยังไม่ถูกเพิ่มใน DB — ถอยไปอ่านเฉพาะคอลัมน์พื้นฐานแทนที่จะพังทั้งหน้า
-                if (error && reviewHasReplyCols) {
-                    reviewHasReplyCols = false;
-                    console.warn('Review reply columns unavailable, falling back:', error.message);
-                    ({ data, error } = await query);
-                }
                 if (error) throw error;
                 const rows = data || [];
                 const userMap = {};
@@ -835,16 +826,35 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     if (userError) throw userError;
                     (users || []).forEach(u => { userMap[u.UserID] = u.Username || 'ผู้ใช้'; });
                 }
-                const replyUserMap = {};
-                const replyUserIds = [...new Set(rows.map(r => r.ReviewReplyUser).filter(v => v !== null && v !== undefined))];
-                if (replyUserIds.length > 0) {
-                    const { data: rusers, error: ruserError } = await supabaseClient
-                        .from('User')
-                        .select('UserID, Username')
-                        .in('UserID', replyUserIds);
-                    if (!ruserError && rusers) {
-                        rusers.forEach(u => { replyUserMap[u.UserID] = u.Username || 'ผู้ใช้'; });
+                // คำตอบเจ้าของร้านจากตาราง Review_Replies (เอาแถว ReplyNo สูงสุดของแต่ละรีวิว)
+                const replyByReview = {};
+                const reviewIds = rows.map(r => r.ReviewID);
+                if (reviewIds.length > 0) {
+                    const { data: replies, error: replyError } = await supabaseClient
+                        .from('Review_Replies')
+                        .select('ReviewID, ReplyNo, UserID, ReplyText, ReplyCreatedAt')
+                        .in('ReviewID', reviewIds)
+                        .order('ReplyNo', { ascending: false });
+                    if (replyError) throw replyError;
+                    const replyUserIds = [...new Set((replies || []).map(r => r.UserID).filter(v => v !== null && v !== undefined))];
+                    const replyUserMap = {};
+                    if (replyUserIds.length > 0) {
+                        const { data: rusers, error: ruserError } = await supabaseClient
+                            .from('User')
+                            .select('UserID, Username')
+                            .in('UserID', replyUserIds);
+                        if (ruserError) throw ruserError;
+                        (rusers || []).forEach(u => { replyUserMap[u.UserID] = u.Username || 'ผู้ใช้'; });
                     }
+                    (replies || []).forEach(rp => {
+                        if (!replyByReview[rp.ReviewID]) {
+                            replyByReview[rp.ReviewID] = {
+                                reply: rp.ReplyText || null,
+                                replyDate: formatReviewDate(rp.ReplyCreatedAt),
+                                replyUser: replyUserMap[rp.UserID] || null
+                            };
+                        }
+                    });
                 }
                 return rows.map(r => ({
                     id: r.ReviewID,
@@ -853,9 +863,9 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     rating: Number(r.ReviewRating) || 0,
                     comment: r.ReviewComment || '-',
                     date: formatReviewDate(r.ReviewCreatedAt),
-                    reply: r.ReviewReply || null,
-                    replyDate: formatReviewDate(r.ReviewRepliedAt),
-                    replyUser: replyUserMap[r.ReviewReplyUser] || null
+                    reply: replyByReview[r.ReviewID]?.reply || null,
+                    replyDate: replyByReview[r.ReviewID]?.replyDate || '',
+                    replyUser: replyByReview[r.ReviewID]?.replyUser || null
                 }));
             };
 
@@ -924,7 +934,16 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
             const toggleReplyBox = (reviewId) => {
                 if (!isShopOwner()) return;
-                openReplyId.value = openReplyId.value === reviewId ? null : reviewId;
+                if (openReplyId.value === reviewId) {
+                    openReplyId.value = null;
+                    return;
+                }
+                openReplyId.value = reviewId;
+                // เปิดแก้คำตอบเดิม: เติมข้อความเก่าลง draft ถ้ายังไม่มีข้อความค้างอยู่
+                if (!replyDrafts[reviewId]) {
+                    const existing = (selectedShop.value?.reviews || []).find(r => r.id === reviewId);
+                    if (existing?.reply) replyDrafts[reviewId] = existing.reply;
+                }
             };
 
             const submitReply = async (review) => {
@@ -958,16 +977,25 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                         return;
                     }
 
-                    const { error: updateError } = await supabaseClient
-                        .from('Review')
-                        .update({
-                            ReviewReply: text,
-                            ReviewReplyUser: ownerUserId,
-                            ReviewRepliedAt: new Date().toISOString()
-                        })
+                    // ตอบกลับ = insert แถวใหม่ลงตาราง Review_Replies (ReplyNo นับต่อของรีวิวนี้ กดแก้ไขก็นับเป็นเวอร์ชันใหม่)
+                    const { data: existing, error: maxError } = await supabaseClient
+                        .from('Review_Replies')
+                        .select('ReplyNo')
                         .eq('ReviewID', reviewId)
-                        .eq('ReviewShop', getShopId(selectedShop.value));
-                    if (updateError) throw updateError;
+                        .order('ReplyNo', { ascending: false })
+                        .limit(1);
+                    if (maxError) throw maxError;
+                    const nextNo = ((existing?.[0]?.ReplyNo ?? 0) + 1);
+
+                    const { error: insertError } = await supabaseClient
+                        .from('Review_Replies')
+                        .insert([{
+                            ReviewID: reviewId,
+                            ReplyNo: nextNo,
+                            UserID: ownerUserId,
+                            ReplyText: text
+                        }]);
+                    if (insertError) throw insertError;
 
                     replyDrafts[reviewId] = '';
                     openReplyId.value = null;
