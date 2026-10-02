@@ -196,7 +196,15 @@
                             <span class="text-gray-500 text-sm">พบ {{ filteredShops.length }} ร้าน</span>
                         </div>
                         
-                        <div v-if="filteredShops.length === 0" class="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <div v-if="loadError" class="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
+                            <i class="fa-solid fa-cloud-exclamation text-6xl text-gray-300 mb-4"></i>
+                            <h3 class="text-xl font-medium text-gray-600">โหลดข้อมูลร้านค้าไม่สำเร็จ</h3>
+                            <p class="text-gray-400 mt-2">ตรวจสอบการเชื่อมต่อแล้วลองใหม่อีกครั้ง</p>
+                            <button @click="loadData" class="mt-4 bg-upPurple hover:bg-purple-800 text-white font-bold py-2 px-6 rounded-lg transition">
+                                <i class="fa-solid fa-rotate-right mr-2"></i> ลองใหม่
+                            </button>
+                        </div>
+                        <div v-else-if="filteredShops.length === 0" class="text-center py-20 bg-white rounded-2xl shadow-sm border border-gray-100">
                             <i class="fa-solid fa-store-slash text-6xl text-gray-300 mb-4"></i>
                             <h3 class="text-xl font-medium text-gray-600">ไม่พบร้านค้าที่ตรงกับเงื่อนไข</h3>
                             <p class="text-gray-400 mt-2">ลองเปลี่ยนคำค้นหา หรือเอาตัวกรอง "เปิดอยู่" ออก</p>
@@ -233,8 +241,9 @@
                                     <p class="text-gray-500 text-sm mb-4 line-clamp-2"><i class="fa-solid fa-quote-left text-gray-300 mr-1"></i> {{ shop.description }}</p>
                                     
                                     <div class="flex items-center text-sm text-gray-500 mb-2">
-                                        <i class="fa-regular fa-clock w-5 text-center mr-1"></i>
-                                        <span>{{ shop.openTime }} - {{ shop.closeTime }} น.</span>
+                                        <i class="fa-regular fa-clock w-5 text-center mr-1 flex-shrink-0"></i>
+                                        <span v-if="compactHoursText(shop)" class="line-clamp-2" :title="compactHoursText(shop) + ' น.'">{{ compactHoursText(shop) }} น.</span>
+                                        <span v-else class="line-clamp-2">{{ shopHoursFallbackText(shop) }}</span>
                                     </div>
                                     <div class="flex items-center text-sm text-gray-500">
                                         <i class="fa-solid fa-location-dot w-5 text-center mr-1 text-red-400"></i>
@@ -256,7 +265,7 @@
                     <img :src="activeImage || selectedShop.image" @click="openLightbox()" class="w-full h-full object-cover cursor-zoom-in" title="กดเพื่อดูรูปใหญ่">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent pointer-events-none"></div>
 
-                    <button @click="navigate('home')" class="absolute top-6 left-6 bg-white/20 hover:bg-white/40 backdrop-blur-md text-white rounded-full w-10 h-10 flex items-center justify-center transition">
+                    <button @click="navigate('home')" class="fixed top-20 left-4 z-40 bg-white/95 backdrop-blur text-gray-700 hover:text-upPurple shadow-lg border border-gray-100 rounded-full w-10 h-10 flex items-center justify-center transition" title="กลับหน้าหลัก">
                         <i class="fa-solid fa-arrow-left"></i>
                     </button>
                     <span v-if="shopImages.length > 1" class="absolute bottom-4 right-4 bg-black/50 text-white text-xs font-medium px-3 py-1 rounded-full backdrop-blur-sm">
@@ -320,7 +329,8 @@
                                             <i class="fa-regular fa-clock mt-1 mr-3 text-upPurple"></i>
                                             <div>
                                                 <div class="font-bold">เวลาเปิด-ปิด</div>
-                                                <div class="text-gray-600">{{ selectedShop.openTime }} - {{ selectedShop.closeTime }} น.</div>
+                                                <div v-if="compactHoursText(selectedShop)" class="text-gray-600">{{ compactHoursText(selectedShop) }} น.</div>
+                                                <div v-else class="text-gray-600">{{ shopHoursFallbackText(selectedShop) }}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -341,6 +351,20 @@
                                                 <div class="font-bold">ช่วงราคา</div>
                                                 <div class="text-gray-600">{{ selectedShop.priceRange }}</div>
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ตารางเวลาเปิด-ปิดรายสัปดาห์ (โชว์เฉพาะร้านที่มีข้อมูลรายวัน) -->
+                                <div v-if="shopWeekRows(selectedShop)" class="pt-6 border-t border-gray-100">
+                                    <h3 class="text-lg font-bold text-gray-800 mb-3">เวลาเปิด-ปิดรายสัปดาห์</h3>
+                                    <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                        <div v-for="row in shopWeekRows(selectedShop)" :key="row.day"
+                                             class="flex items-center justify-between px-4 py-2 text-sm gap-2"
+                                             :class="row.day === todayDow() ? 'bg-purple-50 font-bold text-upPurple' : 'bg-white text-gray-600'">
+                                            <span class="flex-shrink-0">{{ row.name }}{{ row.day === todayDow() ? ' (วันนี้)' : '' }}</span>
+                                            <span v-if="row.shifts.length > 0" class="text-right">{{ row.shifts.map(s => `${s.open} - ${s.close}`).join(', ') }} น.</span>
+                                            <span v-else class="text-red-400">ปิด</span>
                                         </div>
                                     </div>
                                 </div>
@@ -526,7 +550,7 @@
                     </div>
                     
                     <!-- Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-blue-500">
                             <div class="text-sm text-slate-500 mb-1">ร้านค้าในระบบทั้งหมด</div>
                             <div class="text-2xl font-bold text-slate-800">124 ร้าน</div>
@@ -538,10 +562,6 @@
                         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-green-500">
                             <div class="text-sm text-slate-500 mb-1">ผู้ใช้งานระบบ</div>
                             <div class="text-2xl font-bold text-slate-800">1,540 บัญชี</div>
-                        </div>
-                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-red-500">
-                            <div class="text-sm text-slate-500 mb-1">รีวิวที่ถูกรายงานสแปม</div>
-                            <div class="text-2xl font-bold text-slate-800">2 รายการ</div>
                         </div>
                     </div>
                     
@@ -849,54 +869,180 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     image: coverMap[r.ShopID] || FALLBACK_IMG,
                     isOpen: r.ShopManualStatus ?? true,
                     openTime, closeTime,
+                    operatingNote: r.ShopOperatingNote || '',
                     priceRange: r.ShopAvgPrice != null ? `฿${r.ShopAvgPrice}` : '–',
                     distance: '–', lat: lat ?? '', lng: lng ?? '',
                     rating: 0, reviews: [], approvalStatus: 'Approved'
                 };
             };
+            // ข้อความเวลาสำรองเมื่อไม่มีข้อมูลรายวัน: ใช้คู่เวลาถ้ามี ไม่งั้นใช้ note ดิบ (เช่น "ดูเวลารายวัน")
+            const shopHoursFallbackText = (shop) => {
+                if (shop.openTime && shop.closeTime) return `${shop.openTime} - ${shop.closeTime} น.`;
+                if (shop.operatingNote) return shop.operatingNote;
+                return 'ดูเวลารายวันที่หน้าร้าน';
+            };
+
+            // ===== ระบบเวลาเปิด-ปิดรายวัน (ข้อ 8): DayOfWeek มาตรฐาน ISO 1=จันทร์..7=อาทิตย์ ตรง check constraint DB =====
+            const DAY_NAMES_TH = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+            const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 7];
+            const dayNameOf = (d) => DAY_NAMES_TH[d % 7];
+            const dayAbbrOf = (d) => DAY_ABBR_TH[d % 7];
+            // แปลง JS getDay (0=อาทิตย์) เป็น ISO (7=อาทิตย์) ให้ตรง DB
+            const isoDow = (date) => { const g = date.getDay(); return g === 0 ? 7 : g; };
+            const DAY_ABBR_TH = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+            const shopHoursMap = reactive({}); // shopId -> { day: [{ open, close }] } (รองรับหลายกะ เรียงตาม ShiftNo)
+            const manualStatusMap = reactive({}); // shopId -> bool (false = ปิดชั่วคราวทับตาราง)
+            const nowTick = ref(Date.now()); // ขยับทุก 60 วิให้ป้ายเรียลไทม์
+            let openTimer = null;
+
+            const toMinutes = (t) => {
+                const m = String(t || '').match(/(\d{1,2}):(\d{2})/);
+                return m ? (+m[1]) * 60 + (+m[2]) : null;
+            };
+            const isInShift = (nowM, open, close) => {
+                if (open === null || close === null) return false;
+                if (close <= open) return nowM >= open || nowM < close; // ข้ามคืน เช่น 17:00-02:00
+                return nowM >= open && nowM < close;
+            };
+            // AC2: เทียบเวลาเครื่องผู้ใช้กับทุกกะของวันนี้ (กะไหนครอบ = เปิด) — ไม่มีแถว hours ใช้ค่าเดิม fallback
+            const calcIsOpen = (shop) => {
+                const sid = getShopId(shop);
+                if (sid !== null && manualStatusMap[sid] === false) return false;
+                const hours = sid !== null ? shopHoursMap[sid] : null;
+                if (!hours) return !!shop.isOpen;
+                const shifts = hours[isoDow(new Date(nowTick.value))] || [];
+                if (shifts.length === 0) return false;
+                const now = new Date(nowTick.value);
+                const nowM = now.getHours() * 60 + now.getMinutes();
+                return shifts.some(s => isInShift(nowM, toMinutes(s.open), toMinutes(s.close)));
+            };
+            const refreshOpenStatus = () => {
+                nowTick.value = Date.now();
+                shops.value.forEach(s => { s.isOpen = calcIsOpen(s); });
+                if (selectedShop.value) selectedShop.value.isOpen = calcIsOpen(selectedShop.value);
+            };
+            const todayDow = () => isoDow(new Date(nowTick.value));
+            // แถวตารางรายสัปดาห์ของร้าน (null = ไม่มีข้อมูลรายวัน) — แต่ละวันมี shifts[] รองรับหลายกะ
+            const shopWeekRows = (shop) => {
+                const sid = getShopId(shop);
+                const hours = sid !== null ? shopHoursMap[sid] : null;
+                if (!hours) return null;
+                return WEEK_ORDER.map(d => ({ day: d, name: dayNameOf(d), shifts: hours[d] || [] }));
+            };
+            // สรุปเวลาย่อ: วันติดกันเวลาเดียวกันรวมเป็นช่วง (จ.-พ.), ไม่ติดรวมด้วยจุลภาค, หลายกะคั่นจุลภาค, หลายกลุ่มคั่น /
+            // เช่น "จ.-ศ. 07:00-10:00, 14:00-20:00 / ส. 10:00-14:00" — ไม่มีข้อมูลรายวันคืน null ให้ใช้ fallback เดิม
+            const compactHoursText = (shop) => {
+                const sid = getShopId(shop);
+                const hours = sid !== null ? shopHoursMap[sid] : null;
+                if (!hours) return null;
+                const groups = {}; // signature -> [days]
+                WEEK_ORDER.forEach(d => {
+                    const shifts = hours[d] || [];
+                    if (shifts.length === 0) return;
+                    const sig = shifts.map(s => `${s.open}-${s.close}`).join(',');
+                    if (!groups[sig]) groups[sig] = [];
+                    groups[sig].push(d);
+                });
+                const parts = Object.entries(groups).map(([sig, days]) => {
+                    const sorted = [...days].sort((a, b) => WEEK_ORDER.indexOf(a) - WEEK_ORDER.indexOf(b));
+                    // รวมวันติดกัน (ตามลำดับสัปดาห์ จ..อา) เป็นช่วง
+                    const ranges = [];
+                    let start = sorted[0], prev = sorted[0];
+                    for (let i = 1; i <= sorted.length; i++) {
+                        const cur = sorted[i];
+                        if (cur !== undefined && WEEK_ORDER.indexOf(cur) === WEEK_ORDER.indexOf(prev) + 1) {
+                            prev = cur;
+                        } else {
+                            ranges.push(start === prev ? dayAbbrOf(start) : `${dayAbbrOf(start)}-${dayAbbrOf(prev)}`);
+                            start = cur; prev = cur;
+                        }
+                    }
+                    const times = sig.split(',').map(r => r.replace('-', ' - ')).join(', ');
+                    return `${ranges.join(', ')} ${times}`;
+                });
+                return parts.length > 0 ? parts.join(' / ') : null;
+            };
+
+            const loadError = ref(false);
 
             const loadData = async () => {
                 try {
                     isLoading.value = true;
-                    const response = await fetch('./data.json');
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    const data = await response.json();
-                    shops.value = data.shops;
-                    categories.value = data.categories;
-                    recalcDistances();
-                    // AC3: ผูกสถานะอนุมัติจาก DB เข้ากับ seed + เติมร้าน Approved ที่ไม่มีใน seed (เช่นร้านที่ owner เพิ่งสร้าง)
-                    try {
-                        const { data: dbShops, error: dbErr } = await supabaseClient
-                            .from('Shop')
-                            .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopLocation, ShopManualStatus, ShopOperatingNote, ShopApprovalStatus, ShopAvgPrice');
-                        if (dbErr) throw dbErr;
-                        const catNameById = {};
-                        (categories.value || []).forEach(c => { catNameById[Number(c.id)] = c.name; });
+                    loadError.value = false;
+                    // หมวดจากตาราง Category (เลิกอ่าน data.json)
+                    const { data: catRows, error: catErr } = await supabaseClient
+                        .from('Category')
+                        .select('CategoryId, CategoryName, CategoryIconURL')
+                        .order('CategoryId', { ascending: true });
+                    if (catErr) throw catErr;
+                    const FALLBACK_ICONS = { 1: 'fa-solid fa-utensils', 2: 'fa-solid fa-mug-hot', 3: 'fa-solid fa-bag-shopping', 4: 'fa-solid fa-building', 5: 'fa-solid fa-wrench' };
+                    const DEFAULT_CATEGORIES = [
+                        { id: 1, name: 'อาหาร', icon: FALLBACK_ICONS[1] },
+                        { id: 2, name: 'คาเฟ่', icon: FALLBACK_ICONS[2] },
+                        { id: 3, name: 'ร้านค้า', icon: FALLBACK_ICONS[3] },
+                        { id: 4, name: 'หอพัก', icon: FALLBACK_ICONS[4] },
+                        { id: 5, name: 'บริการ', icon: FALLBACK_ICONS[5] }
+                    ];
+                    categories.value = (catRows || []).map(c => ({
+                        id: c.CategoryId,
+                        name: c.CategoryName,
+                        icon: c.CategoryIconURL || FALLBACK_ICONS[Number(c.CategoryId)] || 'fa-solid fa-store'
+                    }));
+                    // กันแถบหมวดว่างถ้าตาราง Category ใน DB ไม่มีแถว (เคยเกิดมาแล้ว)
+                    if (categories.value.length === 0) {
+                        console.warn('Category table empty, using built-in fallback categories');
+                        categories.value = DEFAULT_CATEGORIES;
+                    }
+                    const catNameById = {};
+                    categories.value.forEach(c => { catNameById[Number(c.id)] = c.name; });
+                    // ร้านที่อนุมัติแล้วจากตาราง Shop (เลิกใช้ seed data.json)
+                    const { data: dbShops, error: dbErr } = await supabaseClient
+                        .from('Shop')
+                        .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopLocation, ShopManualStatus, ShopOperatingNote, ShopApprovalStatus, ShopAvgPrice')
+                        .eq('ShopApprovalStatus', 'Approved')
+                        .order('ShopID', { ascending: true });
+                    if (dbErr) throw dbErr;
                         const { data: covers } = await supabaseClient
                             .from('Shop_Image')
                             .select('ShopID, ShopImageURL')
                             .eq('ShopIsCover', true);
                         const coverMap = {};
                         (covers || []).forEach(c => { if (!coverMap[c.ShopID]) coverMap[c.ShopID] = c.ShopImageURL; });
-                        const statusMap = {};
-                        const seedIds = new Set(shops.value.map(s => Number(s.id)));
-                        const extras = [];
-                        (dbShops || []).forEach(r => {
+                        shops.value = (dbShops || []).map(r => {
                             const sid = Number(r.ShopID);
-                            const st = r.ShopApprovalStatus || 'Approved';
-                            statusMap[sid] = st;
-                            if (st === 'Approved' && !seedIds.has(sid)) {
-                                extras.push(normalizeDbShop(r, catNameById, coverMap));
+                            if (r.ShopManualStatus !== null && r.ShopManualStatus !== undefined) {
+                                manualStatusMap[sid] = r.ShopManualStatus === true;
                             }
+                            return normalizeDbShop(r, catNameById, coverMap);
                         });
-                        shops.value.forEach(s => { s.approvalStatus = statusMap[Number(s.id)] || 'Approved'; });
-                        if (extras.length > 0) shops.value = shops.value.concat(extras);
-                        // ร้านจาก DB อาจเพิ่งเข้ามาใหม่ จึงต้องคำนวณระยะทางใหม่ทั้งรายการหลัง merge เสร็จ
+                        // คำนวณระยะทางหลังได้รายการร้านจาก DB
                         recalcDistances();
-                    } catch (dbErr) {
-                        console.warn('Load shop approval statuses failed, showing seeds only:', dbErr);
-                    }
-                    // ดึงเรตติ้งเฉลี่ยจริงจากตาราง Review (query เดียว) มาแทนเลข mock — ร้านไหนยังไม่มีรีวิวใน DB ให้คงค่า fallback จาก data.json ไว้
+                        // โหลดตารางเวลารายวันทั้งระบบ query เดียว (AC1 ข้อ 8) แล้วคำนวณป้ายเปิด/ปิดจริง
+                        try {
+                            const { data: allHours, error: hoursErr } = await supabaseClient
+                                .from('Operating_Hours')
+                                .select('ShopID, DayOfWeek, ShiftNo, OpenTime, CloseTime');
+                            if (hoursErr) throw hoursErr;
+                            (allHours || []).forEach(h => {
+                                const sid = Number(h.ShopID);
+                                const day = Number(h.DayOfWeek);
+                                if (!Number.isInteger(sid) || !Number.isInteger(day)) return;
+                                if (!shopHoursMap[sid]) shopHoursMap[sid] = {};
+                                if (!shopHoursMap[sid][day]) shopHoursMap[sid][day] = [];
+                                shopHoursMap[sid][day].push({
+                                    shift: Number(h.ShiftNo) || 0,
+                                    open: String(h.OpenTime).slice(0, 5),
+                                    close: String(h.CloseTime).slice(0, 5)
+                                });
+                            });
+                            Object.values(shopHoursMap).forEach(byDay => {
+                                Object.values(byDay).forEach(list => list.sort((a, b) => a.shift - b.shift));
+                            });
+                        } catch (hoursErr) {
+                            console.warn('Load operating hours failed, using fallback open status:', hoursErr);
+                        }
+                        refreshOpenStatus();
+                    // ดึงเรตติ้งเฉลี่ยจริงจากตาราง Review (query เดียว)
                     try {
                         const { data: allReviews, error: aggError } = await supabaseClient
                             .from('Review')
@@ -922,6 +1068,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     }
                 } catch (error) {
                     console.error("Error loading data:", error);
+                    loadError.value = true;
                     showToast('error', 'เกิดข้อผิดพลาดในการโหลดข้อมูลร้านค้า');
                 } finally {
                     isLoading.value = false;
@@ -1005,10 +1152,13 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 resolveUser();
                 // ขอ GPS แบบไม่ block การโหลดร้าน — ผู้ใช้ต้องเห็นร้านทันที ตำแหน่งค่อยทยอยมา
                 requestLocation();
+                // รีเฟรชป้ายเปิด/ปิดทุก 60 วิให้เรียลไทม์ (AC2 ข้อ 8)
+                openTimer = setInterval(refreshOpenStatus, 60000);
             });
 
             onUnmounted(() => {
                 authListener?.subscription?.unsubscribe();
+                if (openTimer) clearInterval(openTimer);
             });
 
             const navigate = (view) => {
@@ -1087,7 +1237,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 activeImageIndex.value = (activeImageIndex.value + dir + shopImages.value.length) % shopImages.value.length;
             };
 
-            // helper: รหัสร้านตัวเลขสำหรับคอลัมน์ Review.ReviewShop (รองรับทั้ง ShopID จาก DB และ id จาก data.json)
+            // helper: รหัสร้านตัวเลขสำหรับคอลัมน์ Review.ReviewShop
             const getShopId = (shop) => {
                 const raw = shop?.ShopID ?? shop?.id;
                 const n = Number(raw);
@@ -1396,10 +1546,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             };
 
             const filteredShops = computed(() => {
+                // ทุกร้านในลิสต์มาจาก query Approved แล้ว ไม่ต้องกรองสถานะซ้ำ
                 return shops.value.filter(shop => {
-                    // AC3 (ชั่วคราว): ซ่อนร้านที่ถูกปฏิเสธ — seed จาก data.json ถือว่า Approved จนกว่าจะย้าย Home มาอ่านตาราง Shop
-                    const approval = shop.approvalStatus || shop.ShopApprovalStatus || 'Approved';
-                    if (approval === 'Rejected' || approval === 'Pending') return false;
                     const matchText = shop.name.includes(searchQuery.value) || shop.category.includes(searchQuery.value);
                     const matchCat = searchCategory.value === '' || shop.category === searchCategory.value;
                     const matchStatus = filterOpenNow.value ? shop.isOpen : true;
@@ -1439,6 +1587,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 selectedShop,
                 newReview,
                 isLoading,
+                loadError,
+                loadData,
                 navigate,
                 selectCategory,
                 viewShopDetail,
@@ -1454,6 +1604,12 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 shortGeoLabel,
                 directionsUrl,
                 requestLocation,
+                calcIsOpen,
+                refreshOpenStatus,
+                compactHoursText,
+                shopHoursFallbackText,
+                shopWeekRows,
+                todayDow,
                 toggleLogin,
                 logout,
                 setRating,

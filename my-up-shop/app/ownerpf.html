@@ -50,7 +50,7 @@
             <i class="fa-solid fa-pen-to-square mt-1 mr-3 text-lg"></i>
             <div>
                 <h3 class="font-bold">กำลังแก้ไขร้าน: {{ shop.name || '-' }}</h3>
-                <p class="text-sm">บันทึกแล้วร้านจะกลับไปรอการอนุมัติใหม่</p>
+                <p class="text-sm">บันทึกแล้วมีผลทันที ไม่ต้องรอการอนุมัติใหม่</p>
             </div>
         </div>
         <div v-else class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 text-blue-700 rounded-r-lg shadow-sm flex items-start">
@@ -176,14 +176,42 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-6">
+                <div class="mb-2 flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">เวลาเปิด <span class="text-red-500">*</span></label>
-                        <input v-model="shop.openTime" type="time" :class="fieldErrors.openTime ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-300'" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none">
+                        <div class="font-medium text-slate-700 text-sm">สถานะร้าน <span class="text-red-500">*</span></div>
+                        <div class="text-xs text-slate-400">ปิด = ขึ้น "ปิดแล้ว" ทันทีโดยไม่สนตารางเวลา</div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">เวลาปิด <span class="text-red-500">*</span></label>
-                        <input v-model="shop.closeTime" type="time" :class="fieldErrors.closeTime ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-300'" class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none">
+                    <button type="button" @click="manualOpen = !manualOpen" :class="manualOpen ? 'bg-green-500' : 'bg-slate-300'" class="relative w-12 h-7 rounded-full transition flex-shrink-0" :aria-label="manualOpen ? 'ปิดร้านชั่วคราว' : 'เปิดร้านตามปกติ'">
+                        <span :class="manualOpen ? 'translate-x-6' : 'translate-x-1'" class="absolute top-1 left-0 w-5 h-5 bg-white rounded-full shadow transition-transform"></span>
+                    </button>
+                </div>
+                <p class="text-sm font-medium mb-2" :class="manualOpen ? 'text-green-600' : 'text-red-500'">{{ manualOpen ? 'เปิดร้านตามปกติ' : 'ปิดร้านชั่วคราว' }}</p>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">วัน-เวลาเปิดร้าน <span class="text-red-500">*</span> <span class="text-xs font-normal text-slate-400">(อย่างน้อย 1 วัน, ข้ามคืนได้)</span></label>
+                    <div class="space-y-2" :class="fieldErrors.hours ? 'border border-red-500 rounded-lg p-2' : ''">
+                        <div v-for="d in weekHours" :key="d.day" class="bg-white border border-slate-200 rounded-lg p-2 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <button type="button" @click="d.open = !d.open" class="flex items-center gap-2 flex-shrink-0 text-left">
+                                    <span :class="d.open ? 'bg-[#5c2e91] border-[#5c2e91]' : 'bg-white border-slate-300'" class="w-5 h-5 rounded border-2 flex items-center justify-center transition">
+                                        <i v-if="d.open" class="fa-solid fa-check text-white text-[10px]"></i>
+                                    </span>
+                                    <span class="text-sm font-medium w-20" :class="d.open ? 'text-slate-700' : 'text-slate-400'">{{ d.name }}</span>
+                                </button>
+                                <button v-if="d.open && d.shifts.length < 2" type="button" @click="d.shifts.push({ openTime: '', closeTime: '' })" class="text-xs font-medium text-[#5c2e91] hover:text-purple-800 transition ml-auto">
+                                    <i class="fa-solid fa-plus mr-1"></i> เพิ่มกะที่ 2
+                                </button>
+                            </div>
+                            <div v-for="(s, si) in d.shifts" v-if="d.open" :key="si" class="flex items-center gap-2 pl-7">
+                                <span class="text-xs text-slate-400 w-8 flex-shrink-0">กะ {{ si + 1 }}</span>
+                                <input v-model="s.openTime" type="time" class="flex-1 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none text-sm">
+                                <span class="text-slate-400 text-sm">-</span>
+                                <input v-model="s.closeTime" type="time" class="flex-1 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#5c2e91] focus:outline-none text-sm">
+                                <button v-if="d.shifts.length > 1" type="button" @click="d.shifts.splice(si, 1)" class="px-2 text-red-400 hover:text-red-600 transition flex-shrink-0" title="ลบกะนี้">
+                                    <i class="fa-solid fa-trash text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -246,8 +274,12 @@
         setup() {
             const shop = reactive({
                 name: '', category: '', description: '', avgPrice: '',
-                openTime: '', closeTime: '', lat: '', lng: ''
+                lat: '', lng: ''
             });
+            // ตารางเวลา 7 วัน (DayOfWeek มาตรฐาน ISO 1=จันทร์..7=อาทิตย์ ตรง check constraint DB) — โชว์จันทร์ก่อน
+            const DAY_NAMES = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+            const weekHours = ref([1, 2, 3, 4, 5, 6, 7].map(d => ({ day: d, name: DAY_NAMES[d % 7], open: false, shifts: [{ openTime: '', closeTime: '' }] })));
+            const manualOpen = ref(true); // สวิตช์เปิด/ปิดร้านชั่วคราว → Shop.ManualStatus
             const phones = ref(['']);
 
             const addPhone = () => {
@@ -260,11 +292,10 @@
 
             const errorMessage = ref('');
             const successMessage = ref('');
-            const fieldErrors = reactive({ openTime: false, closeTime: false, lat: false, lng: false, avgPrice: false, phones: false, images: false });
+            const fieldErrors = reactive({ hours: false, lat: false, lng: false, avgPrice: false, phones: false, images: false });
 
             const resetFieldErrors = () => {
-                fieldErrors.openTime = false;
-                fieldErrors.closeTime = false;
+                fieldErrors.hours = false;
                 fieldErrors.lat = false;
                 fieldErrors.lng = false;
                 fieldErrors.avgPrice = false;
@@ -339,6 +370,32 @@
                 if (id === 4) return 'หอพัก';
                 if (id === 5) return 'บริการ';
                 return 'อาหาร';
+            };
+            const openDays = () => weekHours.value.filter(d => d.open);
+            const completeShifts = (d) => (d.shifts || []).filter(s => s.openTime && s.closeTime);
+            const toMin2 = (t) => { const m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+            // เช็กกะทับกันบนไทม์ไลน์วงกลม 1440 นาที (รองรับข้ามคืน)
+            const shiftsOverlap = (a, b) => {
+                const parts = (o, c) => {
+                    const x = toMin2(o), y = toMin2(c);
+                    if (x === null || y === null) return [];
+                    if (y <= x) return [[x, 1440], [0, y]];
+                    return [[x, y]];
+                };
+                const A = parts(a.openTime, a.closeTime), B = parts(b.openTime, b.closeTime);
+                return A.some(([a1, a2]) => B.some(([b1, b2]) => a1 < b2 && b1 < a2));
+            };
+            // สรุปเวลาไว้ใน ShopOperatingNote (fallback หน้า Home): เวลาเดียวกันทุกวันใช้ range นั้น, ไม่เช่นนั้นใช้ข้อความกลาง
+            const deriveOperatingNote = () => {
+                const ranges = [];
+                openDays().forEach(d => {
+                    completeShifts(d).forEach(s => {
+                        const r = `${s.openTime} - ${s.closeTime}`;
+                        if (!ranges.includes(r)) ranges.push(r);
+                    });
+                });
+                if (ranges.length === 0) return '';
+                return ranges.length === 1 ? ranges[0] : 'ดูเวลารายวัน';
             };
             const parseOperatingNote = (note) => {
                 const m = String(note || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
@@ -416,7 +473,7 @@
                     if (shopId === null || shopId === undefined) return;
                     const { data: shops, error: sErr } = await supabaseClient
                         .from('Shop')
-                        .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopAvgPrice, ShopLocation, ShopOperatingNote')
+                        .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopAvgPrice, ShopLocation, ShopManualStatus')
                         .eq('ShopID', shopId).limit(1);
                     if (sErr) throw sErr;
                     if (!shops || shops.length === 0) return; // UserShopID ชี้ร้านที่ไม่มีแล้ว → โหมดสร้าง
@@ -426,10 +483,30 @@
                     shop.category = categoryNameById(Number(s.ShopCategoryId));
                     shop.description = s.ShopDescription || '';
                     shop.avgPrice = s.ShopAvgPrice ?? '';
-                    const [ot, ct] = parseOperatingNote(s.ShopOperatingNote);
-                    shop.openTime = ot; shop.closeTime = ct;
+                    manualOpen.value = s.ShopManualStatus !== false;
                     const loc = parseLocationStr(s.ShopLocation);
                     shop.lat = loc.lat; shop.lng = loc.lng;
+                    // prefill ตารางเวลารายวันจาก Operating_Hours (group ตามวัน เรียงตาม ShiftNo)
+                    const { data: hrs } = await supabaseClient
+                        .from('Operating_Hours').select('DayOfWeek, ShiftNo, OpenTime, CloseTime').eq('ShopID', shopId);
+                    const shiftsByDay = {};
+                    (hrs || []).forEach(h => {
+                        const day = Number(h.DayOfWeek);
+                        if (!Number.isInteger(day)) return;
+                        if (!shiftsByDay[day]) shiftsByDay[day] = [];
+                        shiftsByDay[day].push({ shift: Number(h.ShiftNo) || 0, openTime: String(h.OpenTime).slice(0, 5), closeTime: String(h.CloseTime).slice(0, 5) });
+                    });
+                    weekHours.value.forEach(d => {
+                        const list = (shiftsByDay[d.day] || []).sort((a, b) => a.shift - b.shift).slice(0, 2)
+                            .filter(s => s.openTime && s.closeTime);
+                        if (list.length > 0) {
+                            d.open = true;
+                            d.shifts = list.map(s => ({ openTime: s.openTime, closeTime: s.closeTime }));
+                        } else {
+                            d.open = false;
+                            d.shifts = [{ openTime: '', closeTime: '' }];
+                        }
+                    });
                     const { data: ph } = await supabaseClient
                         .from('ShopPhoneNumber').select('ShopPhoneNumber').eq('ShopID', shopId);
                     if (ph && ph.length > 0) phones.value = ph.map(r => r.ShopPhoneNumber);
@@ -522,11 +599,31 @@
                     return;
                 }
 
-                if (!shop.openTime || !shop.closeTime) {
-                    fieldErrors.openTime = !shop.openTime;
-                    fieldErrors.closeTime = !shop.closeTime;
-                    failValidation('กรุณาระบุเวลาเปิดและเวลาปิดของร้าน');
+                // วัน-เวลาเปิดร้าน: อย่างน้อย 1 วัน, กะที่ 1 ต้องครบ, กะที่ 2 ถ้ากรอกต้องครบและห้ามทับกะที่ 1 (ข้ามคืนได้)
+                const days = openDays();
+                if (days.length === 0) {
+                    fieldErrors.hours = true;
+                    failValidation('กรุณาระบุวัน-เวลาเปิดร้านอย่างน้อย 1 วัน');
                     return;
+                }
+                for (const d of days) {
+                    const s1 = d.shifts[0];
+                    if (!s1?.openTime || !s1?.closeTime) {
+                        fieldErrors.hours = true;
+                        failValidation(`กรุณาระบุเวลาเปิด-ปิด (กะที่ 1) ของวัน${d.name}`);
+                        return;
+                    }
+                    const s2 = d.shifts[1];
+                    if (s2 && ((s2.openTime && !s2.closeTime) || (!s2.openTime && s2.closeTime))) {
+                        fieldErrors.hours = true;
+                        failValidation(`วัน${d.name} กะที่ 2 กรอกไม่ครบ`);
+                        return;
+                    }
+                    if (s2?.openTime && s2?.closeTime && shiftsOverlap(s1, s2)) {
+                        fieldErrors.hours = true;
+                        failValidation(`วัน${d.name} กะที่ 1 กับกะที่ 2 ทับกัน`);
+                        return;
+                    }
                 }
 
                 const latText = String(shop.lat ?? '').trim();
@@ -573,6 +670,21 @@
                 }
             };
 
+            // บันทึกตารางเวลารายวันแบบลบแล้วเขียนใหม่ (AC1 ข้อ 8) — รองรับหลายกะ/วันผ่าน ShiftNo
+            const saveOperatingHours = async (shopId) => {
+                const { error: delErr } = await supabaseClient.from('Operating_Hours').delete().eq('ShopID', shopId);
+                if (delErr) throw new Error('ลบเวลาเก่าไม่สำเร็จ: ' + delErr.message);
+                const rows = [];
+                openDays().forEach(d => {
+                    completeShifts(d).forEach((s, i) => {
+                        rows.push({ ShopID: shopId, DayOfWeek: d.day, ShiftNo: i + 1, OpenTime: s.openTime, CloseTime: s.closeTime });
+                    });
+                });
+                if (rows.length === 0) return;
+                const { error: insErr } = await supabaseClient.from('Operating_Hours').insert(rows);
+                if (insErr) throw new Error('บันทึกเวลาเปิด-ปิดไม่สำเร็จ: ' + insErr.message);
+            };
+
             // โหมดสร้างร้านใหม่ (flow เดิม)
             const createShopProfile = async (categoryId, { avgPriceValue, phoneList, lat, lng }) => {
                     // 1. บันทึกข้อมูลหลักลงตาราง Shop
@@ -584,8 +696,10 @@
                             ShopCategoryId: categoryId, 
                             ShopAvgPrice: avgPriceValue,
                             ShopLocation: `${lat},${lng}`,
-                            ShopOperatingNote: `${shop.openTime} - ${shop.closeTime}`,
-                            ShopApprovalStatus: 'Pending'
+                            ShopManualStatus: manualOpen.value,
+                            ShopOperatingNote: deriveOperatingNote(),
+                            ShopApprovalStatus: 'Pending',
+                            ShopCreatedAt: new Date().toISOString()
                         }])
                         .select(); 
 
@@ -598,6 +712,11 @@
                             .from('ShopPhoneNumber')
                             .insert(phoneList.map(p => ({ ShopID: newShopId, ShopPhoneNumber: p })));
                         if (phoneError) throw new Error('สร้างร้านแล้ว แต่บันทึกเบอร์โทรไม่สำเร็จ: ' + phoneError.message);
+                    }
+
+                    // 2b. บันทึกตารางเวลารายวันลง Operating_Hours (AC1 ข้อ 8)
+                    if (newShopId !== null) {
+                        await saveOperatingHours(newShopId);
                     }
 
                     // ผูกเจ้าของกับร้าน: อัปเดท UserShopID (FK) ในแถว User ของคนกดบันทึกเป็น ID ร้านที่เพิ่งสร้าง
@@ -666,13 +785,14 @@
                     successMessage.value = warnings
                         ? `ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว! (${warnings})`
                         : 'ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว!';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
-            // โหมดแก้ไข: UPDATE ร้านเดิม + กลับ Pending + sync เบอร์/รูป แล้วแจ้งให้เห็น
+            // โหมดแก้ไข: UPDATE ร้านเดิม (ไม่ต้องขออนุมัติใหม่ ของใหม่ขึ้นทันที) + sync เบอร์/รูป แล้วแจ้งให้เห็น
             const updateShopProfile = async (categoryId, { avgPriceValue, phoneList, lat, lng }) => {
                     const editId = editingShopId.value;
 
-                    // 1. อัปเดทข้อมูลหลัก (กลับไปรออนุมัติใหม่) + verify ว่าบันทึกจริง
+                    // 1. อัปเดทข้อมูลหลัก (คงสถานะอนุมัติเดิมไว้) + verify ว่าบันทึกจริง
                     const { data: updated, error: updateError } = await supabaseClient
                         .from('Shop')
                         .update({
@@ -681,8 +801,9 @@
                             ShopCategoryId: categoryId,
                             ShopAvgPrice: avgPriceValue,
                             ShopLocation: `${lat},${lng}`,
-                            ShopOperatingNote: `${shop.openTime} - ${shop.closeTime}`,
-                            ShopApprovalStatus: 'Pending'
+                            ShopManualStatus: manualOpen.value,
+                            ShopOperatingNote: deriveOperatingNote()
+                            // หมายเหตุ: โหมดแก้ไขคง ShopApprovalStatus เดิมไว้ (ไม่ต้องขออนุมัติใหม่)
                         })
                         .eq('ShopID', editId)
                         .select('ShopID');
@@ -699,6 +820,9 @@
                         .from('ShopPhoneNumber')
                         .insert(phoneList.map(p => ({ ShopID: editId, ShopPhoneNumber: p })));
                     if (phoneError) throw new Error('บันทึกเบอร์ใหม่ไม่สำเร็จ: ' + phoneError.message);
+
+                    // 2b. เวลาเปิด-ปิดรายวัน: ลบของเก่าทั้งหมดแล้วเขียนใหม่ (AC1 ข้อ 8)
+                    await saveOperatingHours(editId);
 
                     // 3. รูปภาพ: ลบรูปที่ติ๊กไว้ (แถว + ไฟล์) + อัปโหลดรูปใหม่ต่อท้าย + จัดปกให้เหลือรูปเดียว
                     let imageWarning = '';
@@ -758,13 +882,17 @@
                     }
 
                     successMessage.value = imageWarning
-                        ? `อัปเดทข้อมูลร้านเรียบร้อยแล้ว! (ร้านกลับไปรอการอนุมัติใหม่) (แต่${imageWarning})`
-                        : 'อัปเดทข้อมูลร้านเรียบร้อยแล้ว! (ร้านกลับไปรอการอนุมัติใหม่)';
+                        ? `อัปเดทข้อมูลร้านเรียบร้อยแล้ว! (แต่${imageWarning})`
+                        : 'อัปเดทข้อมูลร้านเรียบร้อยแล้ว!';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             // *** สำคัญมาก: ต้อง return ตัวแปรเหล่านี้ออกไปให้ HTML ใช้ด้วย ***
             return {
                 shop,
+                weekHours,
+                manualOpen,
+                openDays,
                 phones,
                 addPhone,
                 removePhone,
