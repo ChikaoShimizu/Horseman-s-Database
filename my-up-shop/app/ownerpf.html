@@ -45,8 +45,15 @@
         </div>
 
         <template v-else>
-        <!-- ป้ายโหมด: แก้ไข vs สร้างใหม่ -->
-        <div v-if="editingShopId !== null" class="mb-6 p-4 bg-purple-50 border-l-4 border-[#5c2e91] text-purple-800 rounded-r-lg shadow-sm flex items-start">
+        <!-- ป้ายโหมด: แก้ไข vs สร้างใหม่ vs ขอใหม่หลังโดนปฏิเสธ -->
+        <div v-if="editingShopId !== null && currentStatus === 'Rejected'" class="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded-r-lg shadow-sm flex items-start">
+            <i class="fa-solid fa-rotate-right mt-1 mr-3 text-lg"></i>
+            <div>
+                <h3 class="font-bold">ร้านนี้ถูกปฏิเสธ: {{ shop.name || '-' }}</h3>
+                <p class="text-sm">กดบันทึกจะส่งเป็นคำขอใหม่ให้แอดมิน (ข้อมูลเดิมที่ถูกปฏิเสธยังคงไว้เป็นประวัติ)</p>
+            </div>
+        </div>
+        <div v-else-if="editingShopId !== null" class="mb-6 p-4 bg-purple-50 border-l-4 border-[#5c2e91] text-purple-800 rounded-r-lg shadow-sm flex items-start">
             <i class="fa-solid fa-pen-to-square mt-1 mr-3 text-lg"></i>
             <div>
                 <h3 class="font-bold">กำลังแก้ไขร้าน: {{ shop.name || '-' }}</h3>
@@ -252,7 +259,7 @@
             <!-- ปุ่ม Submit -->
             <div class="p-6 border-t border-slate-200 bg-white flex justify-end">
                 <button type="submit" :disabled="!isLoggedInOwner || isLoadingShop" class="bg-[#5c2e91] hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 flex items-center">
-                    <i class="fa-solid fa-save mr-2"></i> {{ editingShopId !== null ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลร้านค้า' }}
+                    <i class="fa-solid fa-save mr-2"></i> {{ editingShopId !== null && currentStatus === 'Rejected' ? 'ส่งขออนุมัติใหม่' : editingShopId !== null ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลร้านค้า' }}
                 </button>
             </div>
             
@@ -357,6 +364,7 @@
             const deletedImageNos = ref([]); // เลขรูปเดิมที่ติ๊กลบไว้
             const coverSel = ref({ source: 'new', index: 0 }); // ปกมีรูปเดียว: {source:'new',index} | {source:'old',no}
             const editingShopId = ref(null); // null = โหมดสร้างร้านใหม่, มีค่า = โหมดแก้ไข
+            const currentStatus = ref(''); // สถานะร้านที่กำลังแก้ (Approved/Pending/Rejected) — Rejected บันทึก = สร้างคำขอใหม่
             const isLoadingShop = ref(true);
             const isLoggedInOwner = ref(false);
 
@@ -473,12 +481,13 @@
                     if (shopId === null || shopId === undefined) return;
                     const { data: shops, error: sErr } = await supabaseClient
                         .from('Shop')
-                        .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopAvgPrice, ShopLocation, ShopManualStatus')
+                        .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopAvgPrice, ShopLocation, ShopManualStatus, ShopApprovalStatus')
                         .eq('ShopID', shopId).limit(1);
                     if (sErr) throw sErr;
                     if (!shops || shops.length === 0) return; // UserShopID ชี้ร้านที่ไม่มีแล้ว → โหมดสร้าง
                     const s = shops[0];
                     editingShopId.value = s.ShopID;
+                    currentStatus.value = s.ShopApprovalStatus || '';
                     shop.name = s.ShopName || '';
                     shop.category = categoryNameById(Number(s.ShopCategoryId));
                     shop.description = s.ShopDescription || '';
@@ -658,8 +667,10 @@
                     else if (shop.category === 'หอพัก') categoryId = 4;
                     else if (shop.category === 'บริการ') categoryId = 5;
 
-                    if (editingShopId.value === null) {
-                        await createShopProfile(categoryId, { avgPriceValue, phoneList, lat, lng });
+                    // ร้านที่โดน Rejected บันทึก = สร้างคำขอใหม่เป็นแถวใหม่ (แถวเก่าคงเป็นประวัติ)
+                    const isResubmit = editingShopId.value !== null && currentStatus.value === 'Rejected';
+                    if (editingShopId.value === null || isResubmit) {
+                        await createShopProfile(categoryId, { avgPriceValue, phoneList, lat, lng, isResubmit });
                     } else {
                         await updateShopProfile(categoryId, { avgPriceValue, phoneList, lat, lng });
                     }
@@ -685,8 +696,8 @@
                 if (insErr) throw new Error('บันทึกเวลาเปิด-ปิดไม่สำเร็จ: ' + insErr.message);
             };
 
-            // โหมดสร้างร้านใหม่ (flow เดิม)
-            const createShopProfile = async (categoryId, { avgPriceValue, phoneList, lat, lng }) => {
+            // โหมดสร้างร้านใหม่ + โหมดขอใหม่หลังโดน Rejected (flow เดียวกัน: แถวใหม่ Pending)
+            const createShopProfile = async (categoryId, { avgPriceValue, phoneList, lat, lng, isResubmit = false }) => {
                     // 1. บันทึกข้อมูลหลักลงตาราง Shop
                     const { data: shopData, error: shopError } = await supabaseClient
                         .from('Shop')
@@ -746,24 +757,37 @@
                         linkWarning = 'ผูกเจ้าของร้านไม่สำเร็จ: ' + (linkErr.message || '');
                     }
 
-                    // 3. อัปโหลดรูปขึ้น Storage bucket shop-images แล้วบันทึกแถวลงตาราง Shop_Image
-                    // (ปกมีรูปเดียว: ตาม radio coverSel, default = รูปแรก) — ล้มเหลวไม่บล็อก แต่ต้องแจ้งให้เห็น
+                    // 3. รูป: รูปเดิมที่เหลือใช้ URL เดิมได้เลย (กรณีขอใหม่หลัง Rejected) + อัปโหลดรูปใหม่ แล้วบันทึกแถวลงตาราง Shop_Image
+                    // (ปกมีรูปเดียว: ตาม radio coverSel) — ล้มเหลวไม่บล็อก แต่ต้องแจ้งให้เห็น
                     let imageWarning = '';
                     let createdRows = [];
                     if (newShopId !== null) {
                         try {
-                            const uploaded = await uploadImageFiles(newShopId, 1);
-                            const coverIdx = coverSel.value.source === 'new' ? coverSel.value.index : 0;
-                            const { error: imageError } = await supabaseClient
-                                .from('Shop_Image')
-                                .insert(uploaded.map((u, i) => ({
-                                    ShopID: newShopId,
-                                    ShopImageNo: u.no,
-                                    ShopImageURL: u.url,
-                                    ShopIsCover: i === coverIdx
-                                })));
-                            if (imageError) throw new Error('อัปโหลดรูปแล้ว แต่บันทึกลงตารางไม่สำเร็จ: ' + imageError.message);
-                            createdRows = uploaded.map((u, i) => ({ no: u.no, url: u.url, isCover: i === coverIdx }));
+                            const reused = keptOldImages().map((r, k) => ({ no: k + 1, url: r.url }));
+                            const uploaded = await uploadImageFiles(newShopId, reused.length + 1);
+                            // หาเลขปกสุดท้าย (cover อาจชี้รูปเดิมหรือรูปใหม่)
+                            let coverNo = null;
+                            if (coverSel.value.source === 'new' && uploaded[coverSel.value.index]) {
+                                coverNo = uploaded[coverSel.value.index].no;
+                            } else if (coverSel.value.source === 'old') {
+                                const idx = keptOldImages().findIndex(r => r.no === coverSel.value.no);
+                                if (idx >= 0) coverNo = idx + 1;
+                            }
+                            if (coverNo === null && reused.length + uploaded.length > 0) coverNo = 1;
+                            const allRows = [
+                                ...reused.map(r => ({ ShopID: newShopId, ShopImageNo: r.no, ShopImageURL: r.url, ShopIsCover: r.no === coverNo })),
+                                ...uploaded.map(u => ({ ShopID: newShopId, ShopImageNo: u.no, ShopImageURL: u.url, ShopIsCover: u.no === coverNo }))
+                            ];
+                            if (allRows.length > 0) {
+                                const { error: imageError } = await supabaseClient
+                                    .from('Shop_Image')
+                                    .insert(allRows);
+                                if (imageError) throw new Error('บันทึกรูปลงตารางไม่สำเร็จ: ' + imageError.message);
+                            }
+                            createdRows = [
+                                ...reused.map(r => ({ no: r.no, url: r.url, isCover: r.no === coverNo })),
+                                ...uploaded.map(u => ({ no: u.no, url: u.url, isCover: u.no === coverNo }))
+                            ];
                         } catch (imgErr) {
                             console.warn('Shop image upload failed:', imgErr);
                             imageWarning = 'อัปโหลดรูปไม่สำเร็จ: ' + (imgErr.message || '');
@@ -773,6 +797,7 @@
                     // สร้างสำเร็จแล้วถือว่ามีร้านแล้ว: ย้ายเข้าโหมดแก้ไขทันทีกันกดซ้ำได้ร้านซ้ำ
                     if (newShopId !== null) {
                         editingShopId.value = newShopId;
+                        currentStatus.value = 'Pending';
                         existingImages.value = createdRows;
                         imageList.value = [];
                         deletedImageNos.value = [];
@@ -782,9 +807,8 @@
 
                     // แสดงกล่องข้อความสีเขียว (ถ้าผูกเจ้าของ/อัปโหลดรูปไม่สำเร็จให้บอกต่อท้ายด้วย)
                     const warnings = [linkWarning, imageWarning].filter(w => w).map(w => `แต่${w}`).join(' ');
-                    successMessage.value = warnings
-                        ? `ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว! (${warnings})`
-                        : 'ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว!';
+                    const doneText = isResubmit ? 'ส่งคำขออนุมัติใหม่เรียบร้อยแล้ว!' : 'ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว!';
+                    successMessage.value = warnings ? `${doneText} (${warnings})` : doneText;
                     window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
@@ -912,6 +936,7 @@
                 removeImage,
                 removeExistingImage,
                 editingShopId,
+                currentStatus,
                 isLoadingShop,
                 isLoggedInOwner,
                 loadMyShop
