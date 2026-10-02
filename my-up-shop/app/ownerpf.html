@@ -38,7 +38,38 @@
     </nav>
 
     <main class="max-w-4xl mx-auto px-4 mt-8">
-        
+
+        <!-- กำลังโหลดข้อมูลร้านเดิม -->
+        <div v-if="isLoadingShop" class="mb-6 p-6 bg-white rounded-2xl shadow-sm border border-slate-200 text-center text-slate-500 text-sm">
+            <i class="fa-solid fa-spinner fa-spin mr-2 text-[#5c2e91]"></i> กำลังโหลดข้อมูลร้าน...
+        </div>
+
+        <template v-else>
+        <!-- ป้ายโหมด: แก้ไข vs สร้างใหม่ -->
+        <div v-if="editingShopId !== null" class="mb-6 p-4 bg-purple-50 border-l-4 border-[#5c2e91] text-purple-800 rounded-r-lg shadow-sm flex items-start">
+            <i class="fa-solid fa-pen-to-square mt-1 mr-3 text-lg"></i>
+            <div>
+                <h3 class="font-bold">กำลังแก้ไขร้าน: {{ shop.name || '-' }}</h3>
+                <p class="text-sm">บันทึกแล้วร้านจะกลับไปรอการอนุมัติใหม่</p>
+            </div>
+        </div>
+        <div v-else class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 text-blue-700 rounded-r-lg shadow-sm flex items-start">
+            <i class="fa-solid fa-plus-circle mt-1 mr-3 text-lg"></i>
+            <div>
+                <h3 class="font-bold">สร้างร้านค้าใหม่</h3>
+                <p class="text-sm">กรอกข้อมูลแล้วส่งให้แอดมินอนุมัติ</p>
+            </div>
+        </div>
+
+        <!-- เตือนเมื่อยังไม่เข้าสู่ระบบ (บันทึกถูกบล็อก) -->
+        <div v-if="!isLoggedInOwner" class="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 text-yellow-700 rounded-r-lg shadow-sm flex items-start">
+            <i class="fa-solid fa-lock mt-1 mr-3 text-lg"></i>
+            <div>
+                <h3 class="font-bold">ยังไม่ได้เข้าสู่ระบบ</h3>
+                <p class="text-sm">กรุณา<a href="login.html" class="font-bold underline">เข้าสู่ระบบ</a>ก่อนบันทึกข้อมูลร้าน</p>
+            </div>
+        </div>
+        </template>
         <!-- กล่องแสดงข้อความ Error (Edge Cases) -->
         <div v-if="errorMessage" class="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-r-lg shadow-sm flex items-start">
             <i class="fa-solid fa-triangle-exclamation mt-1 mr-3 text-lg"></i>
@@ -112,17 +143,34 @@
 
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-slate-700 mb-1">รูปภาพร้านค้า <span class="text-red-500">*</span> <span class="text-xs font-normal text-slate-400">(1–10 รูป, รูปละไม่เกิน 5MB)</span></label>
+                    <!-- รูปปัจจุบันของร้าน (โหมดแก้ไข): ลบได้, เลือกปกได้ -->
+                    <div v-if="existingImages.length > 0" class="mb-3">
+                        <p class="text-xs font-medium text-slate-500 mb-2">รูปปัจจุบันของร้าน</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div v-for="img in keptOldImages()" :key="'old-' + img.no" class="relative rounded-lg overflow-hidden border shadow-sm" :class="isCoverOld(img.no) ? 'border-[#5c2e91] ring-2 ring-[#5c2e91]/40' : 'border-slate-200'">
+                                <img :src="img.url" class="h-32 w-full object-cover">
+                                <button type="button" @click="removeExistingImage(img.no)" class="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white text-xs transition" title="ลบรูปนี้">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                                <label class="absolute bottom-1 left-1 flex items-center gap-1 bg-white/90 rounded-full pl-2 pr-3 py-1 text-xs font-medium cursor-pointer" :class="isCoverOld(img.no) ? 'text-[#5c2e91]' : 'text-slate-500'">
+                                    <input type="radio" name="cover" :checked="isCoverOld(img.no)" @change="coverSel = { source: 'old', no: img.no }" class="accent-[#5c2e91]">
+                                    {{ isCoverOld(img.no) ? 'ปก' : 'ตั้งเป็นปก' }}
+                                </label>
+                            </div>
+                        </div>
+                        <p v-if="deletedImageNos.length > 0" class="text-xs text-red-500 mt-2"><i class="fa-solid fa-circle-info mr-1"></i> จะลบ {{ deletedImageNos.length }} รูปเมื่อกดบันทึก</p>
+                    </div>
                     <input type="file" accept="image/*" multiple @change="handleFileUpload" :class="fieldErrors.images ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-300'" class="w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5c2e91]">
                     <!-- preview ทุกรูป + เลือกปก (ปกมีได้รูปเดียว, default = รูปแรก) -->
                     <div v-if="imageList.length > 0" class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        <div v-for="(img, idx) in imageList" :key="idx" class="relative rounded-lg overflow-hidden border shadow-sm" :class="coverIndex === idx ? 'border-[#5c2e91] ring-2 ring-[#5c2e91]/40' : 'border-slate-200'">
+                        <div v-for="(img, idx) in imageList" :key="idx" class="relative rounded-lg overflow-hidden border shadow-sm" :class="isCoverNew(idx) ? 'border-[#5c2e91] ring-2 ring-[#5c2e91]/40' : 'border-slate-200'">
                             <img :src="img.preview" class="h-32 w-full object-cover">
                             <button type="button" @click="removeImage(idx)" class="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white text-xs transition" title="ลบรูปนี้">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
-                            <label class="absolute bottom-1 left-1 flex items-center gap-1 bg-white/90 rounded-full pl-2 pr-3 py-1 text-xs font-medium cursor-pointer" :class="coverIndex === idx ? 'text-[#5c2e91]' : 'text-slate-500'">
-                                <input type="radio" name="cover" :checked="coverIndex === idx" @change="coverIndex = idx" class="accent-[#5c2e91]">
-                                {{ coverIndex === idx ? 'ปก' : 'ตั้งเป็นปก' }}
+                            <label class="absolute bottom-1 left-1 flex items-center gap-1 bg-white/90 rounded-full pl-2 pr-3 py-1 text-xs font-medium cursor-pointer" :class="isCoverNew(idx) ? 'text-[#5c2e91]' : 'text-slate-500'">
+                                <input type="radio" name="cover" :checked="isCoverNew(idx)" @change="coverSel = { source: 'new', index: idx }" class="accent-[#5c2e91]">
+                                {{ isCoverNew(idx) ? 'ปก' : 'ตั้งเป็นปก' }}
                             </label>
                         </div>
                     </div>
@@ -175,12 +223,13 @@
 
             <!-- ปุ่ม Submit -->
             <div class="p-6 border-t border-slate-200 bg-white flex justify-end">
-                <button type="submit" class="bg-[#5c2e91] hover:bg-purple-800 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 flex items-center">
-                    <i class="fa-solid fa-save mr-2"></i> บันทึกข้อมูลร้านค้า
+                <button type="submit" :disabled="!isLoggedInOwner || isLoadingShop" class="bg-[#5c2e91] hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 flex items-center">
+                    <i class="fa-solid fa-save mr-2"></i> {{ editingShopId !== null ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลร้านค้า' }}
                 </button>
             </div>
             
         </form>
+        </template>
     </main>
 </div>
 
@@ -253,6 +302,8 @@
                     fieldErrors.lng = false;
                     errorMessage.value = '';
                 });
+
+                loadMyShop();
             });
 
             watch([() => shop.lat, () => shop.lng], ([newLat, newLng]) => {
@@ -270,16 +321,46 @@
 
             const MAX_IMAGES = 10;
             const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB ต่อรูป
-            const imageList = ref([]); // [{ file, preview }]
-            const coverIndex = ref(0);
+            const imageList = ref([]); // รูปใหม่ที่เพิ่งเลือก [{ file, preview }]
+            const existingImages = ref([]); // รูปเดิมใน DB [{ no, url, isCover }]
+            const deletedImageNos = ref([]); // เลขรูปเดิมที่ติ๊กลบไว้
+            const coverSel = ref({ source: 'new', index: 0 }); // ปกมีรูปเดียว: {source:'new',index} | {source:'old',no}
+            const editingShopId = ref(null); // null = โหมดสร้างร้านใหม่, มีค่า = โหมดแก้ไข
+            const isLoadingShop = ref(true);
+            const isLoggedInOwner = ref(false);
+
+            const keptOldImages = () => existingImages.value.filter(r => !deletedImageNos.value.includes(r.no));
+            const isCoverNew = (idx) => coverSel.value.source === 'new' && coverSel.value.index === idx;
+            const isCoverOld = (no) => coverSel.value.source === 'old' && coverSel.value.no === no;
+
+            const categoryNameById = (id) => {
+                if (id === 2) return 'คาเฟ่';
+                if (id === 3) return 'ซักรีด';
+                if (id === 4) return 'หอพัก';
+                if (id === 5) return 'บริการ';
+                return 'อาหาร';
+            };
+            const parseOperatingNote = (note) => {
+                const m = String(note || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+                return m ? [m[1], m[2]] : ['', ''];
+            };
+            const parseLocationStr = (loc) => {
+                const parts = String(loc || '').split(',');
+                const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+                return { lat: Number.isFinite(lat) ? String(lat) : '', lng: Number.isFinite(lng) ? String(lng) : '' };
+            };
+            const storagePathFromUrl = (url) => {
+                const parts = String(url || '').split('/shop-images/');
+                return parts.length > 1 ? parts[1].split('?')[0] : null;
+            };
 
             const handleFileUpload = (event) => {
                 const files = Array.from(event.target.files || []);
                 // รีเซ็ต input ให้เลือกไฟล์เดิมซ้ำได้
                 event.target.value = '';
                 files.forEach((file) => {
-                    if (imageList.value.length >= MAX_IMAGES) {
-                        errorMessage.value = `เลือกรูปได้สูงสุด ${MAX_IMAGES} รูป`;
+                    if (keptOldImages().length + imageList.value.length >= MAX_IMAGES) {
+                        errorMessage.value = `เลือกรูปได้สูงสุด ${MAX_IMAGES} รูป (รวมรูปเดิม)`;
                         return;
                     }
                     if (!file.type.startsWith('image/')) {
@@ -292,24 +373,106 @@
                     }
                     imageList.value.push({ file, preview: URL.createObjectURL(file) });
                 });
-                if (imageList.value.length > 0) {
-                    fieldErrors.images = false;
-                    if (coverIndex.value >= imageList.value.length) coverIndex.value = 0;
-                }
+                if (imageList.value.length > 0) fieldErrors.images = false;
             };
 
             const removeImage = (idx) => {
                 const removed = imageList.value.splice(idx, 1)[0];
                 if (removed) URL.revokeObjectURL(removed.preview);
-                // ถ้าลบรูปที่เป็นปก ปกย้ายไปรูปแรกที่เหลืออัตโนมัติ
-                if (coverIndex.value >= imageList.value.length) coverIndex.value = 0;
+                // ถ้าลบรูปที่เป็นปก ปกย้ายไปรูปใหม่รูปแรกที่เหลือ (หรือรูปเดิมรูปแรก)
+                if (coverSel.value.source === 'new') {
+                    if (coverSel.value.index === idx) {
+                        coverSel.value = imageList.value.length > 0
+                            ? { source: 'new', index: 0 }
+                            : (keptOldImages()[0] ? { source: 'old', no: keptOldImages()[0].no } : { source: 'new', index: 0 });
+                    } else if (coverSel.value.index > idx) {
+                        coverSel.value = { source: 'new', index: coverSel.value.index - 1 };
+                    }
+                }
+            };
+
+            const removeExistingImage = (no) => {
+                if (!deletedImageNos.value.includes(no)) deletedImageNos.value.push(no);
+                // ถ้าลบรูปที่เป็นปก ปกย้ายไปรูปเดิมรูปแรกที่เหลือ (หรือรูปใหม่รูปแรก)
+                if (isCoverOld(no)) {
+                    const kept = keptOldImages();
+                    if (kept.length > 0) coverSel.value = { source: 'old', no: kept[0].no };
+                    else if (imageList.value.length > 0) coverSel.value = { source: 'new', index: 0 };
+                }
+            };
+
+            // โหมดแก้ไข: ถ้า owner มีร้านแล้ว (UserShopID) โหลดข้อมูลเดิมมา prefill — ถ้าไม่มีก็ฟอร์มเปล่า (โหมดสร้าง)
+            const loadMyShop = async () => {
+                isLoadingShop.value = true;
+                try {
+                    const { data: userData } = await supabaseClient.auth.getUser();
+                    const email = userData?.user?.email || localStorage.getItem('userEmail');
+                    if (!email) { isLoggedInOwner.value = false; return; }
+                    isLoggedInOwner.value = true;
+                    const { data: users, error: uErr } = await supabaseClient
+                        .from('User').select('UserID, UserShopID').eq('UserEmail', email).limit(1);
+                    if (uErr) throw uErr;
+                    const shopId = users?.[0]?.UserShopID ?? null;
+                    if (shopId === null || shopId === undefined) return;
+                    const { data: shops, error: sErr } = await supabaseClient
+                        .from('Shop')
+                        .select('ShopID, ShopCategoryId, ShopName, ShopDescription, ShopAvgPrice, ShopLocation, ShopOperatingNote')
+                        .eq('ShopID', shopId).limit(1);
+                    if (sErr) throw sErr;
+                    if (!shops || shops.length === 0) return; // UserShopID ชี้ร้านที่ไม่มีแล้ว → โหมดสร้าง
+                    const s = shops[0];
+                    editingShopId.value = s.ShopID;
+                    shop.name = s.ShopName || '';
+                    shop.category = categoryNameById(Number(s.ShopCategoryId));
+                    shop.description = s.ShopDescription || '';
+                    shop.avgPrice = s.ShopAvgPrice ?? '';
+                    const [ot, ct] = parseOperatingNote(s.ShopOperatingNote);
+                    shop.openTime = ot; shop.closeTime = ct;
+                    const loc = parseLocationStr(s.ShopLocation);
+                    shop.lat = loc.lat; shop.lng = loc.lng;
+                    const { data: ph } = await supabaseClient
+                        .from('ShopPhoneNumber').select('ShopPhoneNumber').eq('ShopID', shopId);
+                    if (ph && ph.length > 0) phones.value = ph.map(r => r.ShopPhoneNumber);
+                    const { data: imgs } = await supabaseClient
+                        .from('Shop_Image').select('ShopImageNo, ShopImageURL, ShopIsCover').eq('ShopID', shopId).order('ShopImageNo', { ascending: true });
+                    existingImages.value = (imgs || []).map(r => ({ no: r.ShopImageNo, url: r.ShopImageURL, isCover: r.ShopIsCover === true }));
+                    const coverRow = existingImages.value.find(r => r.isCover) || existingImages.value[0];
+                    if (coverRow) coverSel.value = { source: 'old', no: coverRow.no };
+                } catch (err) {
+                    console.error('Error loading my shop:', err);
+                    errorMessage.value = 'โหลดข้อมูลร้านไม่สำเร็จ: ' + (err.message || '');
+                } finally {
+                    isLoadingShop.value = false;
+                }
+            };
+
+            // อัปโหลดไฟล์รูปใหม่ขึ้น Storage แล้วคืน [{no, url}] (no เริ่มจาก startNo)
+            const uploadImageFiles = async (shopId, startNo) => {
+                const out = [];
+                for (let i = 0; i < imageList.value.length; i++) {
+                    const file = imageList.value[i].file;
+                    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+                    const path = `${shopId}/${Date.now()}-${i}.${ext}`;
+                    const { error: uploadError } = await supabaseClient.storage
+                        .from('shop-images')
+                        .upload(path, file, { contentType: file.type, upsert: false });
+                    if (uploadError) throw new Error(`อัปโหลดรูปที่ ${i + 1} ไม่สำเร็จ: ` + uploadError.message);
+                    const { data: urlData } = supabaseClient.storage.from('shop-images').getPublicUrl(path);
+                    out.push({ no: startNo + i, url: urlData.publicUrl });
+                }
+                return out;
             };
 
             const saveShopProfile = async () => {
                 errorMessage.value = '';
                 successMessage.value = ''; // เคลียร์ข้อความสำเร็จเก่า
                 resetFieldErrors();
-                
+
+                // Guard: ต้องล็อกอินก่อนบันทึก (กันร้านกำพร้าไม่มีเจ้าของ)
+                if (!isLoggedInOwner.value) {
+                    failValidation('กรุณาเข้าสู่ระบบก่อนบันทึกข้อมูลร้าน');
+                    return;
+                }
                 if (!shop.name || !shop.category) { 
                     failValidation('กรุณากรอกข้อมูลสำคัญให้ครบถ้วน');
                     return; 
@@ -346,15 +509,16 @@
                     return;
                 }
 
-                // รูปภาพ: บังคับ 1–10 รูป (ชนิด/ขนาดเช็คตอนเลือกไฟล์แล้ว เหลือเช็คจำนวนตรงนี้)
-                if (imageList.value.length === 0) {
+                // รูปภาพ: รวมรูปเดิมที่เหลือ + รูปใหม่ ต้องมี 1–10 รูป
+                const totalImages = keptOldImages().length + imageList.value.length;
+                if (totalImages === 0) {
                     fieldErrors.images = true;
                     failValidation('กรุณาเลือกรูปภาพร้านอย่างน้อย 1 รูป');
                     return;
                 }
-                if (imageList.value.length > MAX_IMAGES) {
+                if (totalImages > MAX_IMAGES) {
                     fieldErrors.images = true;
-                    failValidation(`เลือกรูปได้สูงสุด ${MAX_IMAGES} รูป`);
+                    failValidation(`รูปภาพรวมกันได้สูงสุด ${MAX_IMAGES} รูป (ตอนนี้มี ${totalImages} รูป)`);
                     return;
                 }
 
@@ -397,7 +561,21 @@
                     else if (shop.category === 'หอพัก') categoryId = 4;
                     else if (shop.category === 'บริการ') categoryId = 5;
 
-                    // 1. บันทึกแค่ข้อมูล Text ลงตาราง Shop เท่านั้น (ปิดระบบรูปไว้ก่อน)
+                    if (editingShopId.value === null) {
+                        await createShopProfile(categoryId, { avgPriceValue, phoneList, lat, lng });
+                    } else {
+                        await updateShopProfile(categoryId, { avgPriceValue, phoneList, lat, lng });
+                    }
+
+                } catch (err) {
+                    console.error('Error saving shop:', err);
+                    errorMessage.value = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + err.message;
+                }
+            };
+
+            // โหมดสร้างร้านใหม่ (flow เดิม)
+            const createShopProfile = async (categoryId, { avgPriceValue, phoneList, lat, lng }) => {
+                    // 1. บันทึกข้อมูลหลักลงตาราง Shop
                     const { data: shopData, error: shopError } = await supabaseClient
                         .from('Shop')
                         .insert([{
@@ -450,35 +628,37 @@
                     }
 
                     // 3. อัปโหลดรูปขึ้น Storage bucket shop-images แล้วบันทึกแถวลงตาราง Shop_Image
-                    // (ปกมีรูปเดียว: ตาม radio coverIndex, default = รูปแรก) — ล้มเหลวไม่บล็อก แต่ต้องแจ้งให้เห็น
+                    // (ปกมีรูปเดียว: ตาม radio coverSel, default = รูปแรก) — ล้มเหลวไม่บล็อก แต่ต้องแจ้งให้เห็น
                     let imageWarning = '';
+                    let createdRows = [];
                     if (newShopId !== null) {
                         try {
-                            const uploadedUrls = [];
-                            for (let i = 0; i < imageList.value.length; i++) {
-                                const file = imageList.value[i].file;
-                                const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-                                const path = `${newShopId}/${Date.now()}-${i}.${ext}`;
-                                const { error: uploadError } = await supabaseClient.storage
-                                    .from('shop-images')
-                                    .upload(path, file, { contentType: file.type, upsert: false });
-                                if (uploadError) throw new Error(`อัปโหลดรูปที่ ${i + 1} ไม่สำเร็จ: ` + uploadError.message);
-                                const { data: urlData } = supabaseClient.storage.from('shop-images').getPublicUrl(path);
-                                uploadedUrls.push(urlData.publicUrl);
-                            }
+                            const uploaded = await uploadImageFiles(newShopId, 1);
+                            const coverIdx = coverSel.value.source === 'new' ? coverSel.value.index : 0;
                             const { error: imageError } = await supabaseClient
                                 .from('Shop_Image')
-                                .insert(uploadedUrls.map((url, i) => ({
+                                .insert(uploaded.map((u, i) => ({
                                     ShopID: newShopId,
-                                    ShopImageNo: i + 1,
-                                    ShopImageURL: url,
-                                    ShopIsCover: i === coverIndex.value
+                                    ShopImageNo: u.no,
+                                    ShopImageURL: u.url,
+                                    ShopIsCover: i === coverIdx
                                 })));
                             if (imageError) throw new Error('อัปโหลดรูปแล้ว แต่บันทึกลงตารางไม่สำเร็จ: ' + imageError.message);
+                            createdRows = uploaded.map((u, i) => ({ no: u.no, url: u.url, isCover: i === coverIdx }));
                         } catch (imgErr) {
                             console.warn('Shop image upload failed:', imgErr);
                             imageWarning = 'อัปโหลดรูปไม่สำเร็จ: ' + (imgErr.message || '');
                         }
+                    }
+
+                    // สร้างสำเร็จแล้วถือว่ามีร้านแล้ว: ย้ายเข้าโหมดแก้ไขทันทีกันกดซ้ำได้ร้านซ้ำ
+                    if (newShopId !== null) {
+                        editingShopId.value = newShopId;
+                        existingImages.value = createdRows;
+                        imageList.value = [];
+                        deletedImageNos.value = [];
+                        const coverRow = createdRows.find(r => r.isCover) || createdRows[0];
+                        coverSel.value = coverRow ? { source: 'old', no: coverRow.no } : { source: 'new', index: 0 };
                     }
 
                     // แสดงกล่องข้อความสีเขียว (ถ้าผูกเจ้าของ/อัปโหลดรูปไม่สำเร็จให้บอกต่อท้ายด้วย)
@@ -486,14 +666,100 @@
                     successMessage.value = warnings
                         ? `ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว! (${warnings})`
                         : 'ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว!';
-                    
-                    // ปิดการเด้งไปหน้า index ชั่วคราว จะได้เห็นว่ามันทำงานสำเร็จจริงๆ
-                    // window.location.href = 'index.html'; 
+            };
 
-                } catch (err) {
-                    console.error('Error saving shop:', err);
-                    errorMessage.value = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + err.message;
-                }
+            // โหมดแก้ไข: UPDATE ร้านเดิม + กลับ Pending + sync เบอร์/รูป แล้วแจ้งให้เห็น
+            const updateShopProfile = async (categoryId, { avgPriceValue, phoneList, lat, lng }) => {
+                    const editId = editingShopId.value;
+
+                    // 1. อัปเดทข้อมูลหลัก (กลับไปรออนุมัติใหม่) + verify ว่าบันทึกจริง
+                    const { data: updated, error: updateError } = await supabaseClient
+                        .from('Shop')
+                        .update({
+                            ShopName: shop.name,
+                            ShopDescription: shop.description,
+                            ShopCategoryId: categoryId,
+                            ShopAvgPrice: avgPriceValue,
+                            ShopLocation: `${lat},${lng}`,
+                            ShopOperatingNote: `${shop.openTime} - ${shop.closeTime}`,
+                            ShopApprovalStatus: 'Pending'
+                        })
+                        .eq('ShopID', editId)
+                        .select('ShopID');
+                    if (updateError) throw updateError;
+                    if (!updated || updated.length === 0) {
+                        throw new Error('DB ไม่ได้บันทึก (0 แถว) — ตรวจ RLS UPDATE ของตาราง Shop');
+                    }
+
+                    // 2. เบอร์โทร: ลบของเก่าทั้งหมดแล้วเขียนใหม่
+                    const { error: delPhoneErr } = await supabaseClient
+                        .from('ShopPhoneNumber').delete().eq('ShopID', editId);
+                    if (delPhoneErr) throw new Error('ลบเบอร์เก่าไม่สำเร็จ: ' + delPhoneErr.message);
+                    const { error: phoneError } = await supabaseClient
+                        .from('ShopPhoneNumber')
+                        .insert(phoneList.map(p => ({ ShopID: editId, ShopPhoneNumber: p })));
+                    if (phoneError) throw new Error('บันทึกเบอร์ใหม่ไม่สำเร็จ: ' + phoneError.message);
+
+                    // 3. รูปภาพ: ลบรูปที่ติ๊กไว้ (แถว + ไฟล์) + อัปโหลดรูปใหม่ต่อท้าย + จัดปกให้เหลือรูปเดียว
+                    let imageWarning = '';
+                    try {
+                        const toDelete = [...deletedImageNos.value];
+                        for (const no of toDelete) {
+                            const { error: delImgErr } = await supabaseClient
+                                .from('Shop_Image').delete().eq('ShopID', editId).eq('ShopImageNo', no);
+                            if (delImgErr) throw new Error(`ลบรูปเก่า (No.${no}) ไม่สำเร็จ: ` + delImgErr.message);
+                            const path = storagePathFromUrl(existingImages.value.find(r => r.no === no)?.url);
+                            if (path) {
+                                const { error: fErr } = await supabaseClient.storage.from('shop-images').remove([path]);
+                                if (fErr) console.warn('Remove storage file failed:', path, fErr);
+                            }
+                        }
+                        const maxNo = existingImages.value
+                            .filter(r => !toDelete.includes(r.no))
+                            .reduce((m, r) => Math.max(m, Number(r.no) || 0), 0);
+                        const uploaded = await uploadImageFiles(editId, maxNo + 1);
+                        if (uploaded.length > 0) {
+                            const { error: imageError } = await supabaseClient
+                                .from('Shop_Image')
+                                .insert(uploaded.map(u => ({ ShopID: editId, ShopImageNo: u.no, ShopImageURL: u.url, ShopIsCover: false })));
+                            if (imageError) throw new Error('บันทึกรูปใหม่ลงตารางไม่สำเร็จ: ' + imageError.message);
+                        }
+                        // หาปกสุดท้าย: ตาม radio ที่เลือก (ถ้าชี้รูปที่ถูกลบไปแล้วให้ตกไปรูปแรกที่เหลือ)
+                        let finalNo = null;
+                        if (coverSel.value.source === 'new' && uploaded[coverSel.value.index]) {
+                            finalNo = uploaded[coverSel.value.index].no;
+                        } else if (coverSel.value.source === 'old' && !toDelete.includes(coverSel.value.no)) {
+                            finalNo = coverSel.value.no;
+                        }
+                        if (finalNo === null) {
+                            const remaining = existingImages.value.filter(r => !toDelete.includes(r.no)).map(r => r.no)
+                                .concat(uploaded.map(u => u.no));
+                            finalNo = remaining.length > 0 ? remaining[0] : null;
+                        }
+                        const { error: resetErr } = await supabaseClient
+                            .from('Shop_Image').update({ ShopIsCover: false }).eq('ShopID', editId);
+                        if (resetErr) throw new Error('รีเซ็ตปกไม่สำเร็จ: ' + resetErr.message);
+                        if (finalNo !== null) {
+                            const { error: coverErr } = await supabaseClient
+                                .from('Shop_Image').update({ ShopIsCover: true }).eq('ShopID', editId).eq('ShopImageNo', finalNo);
+                            if (coverErr) throw new Error('ตั้งปกไม่สำเร็จ: ' + coverErr.message);
+                        }
+                        // sync state หน้าเว็บให้ตรง DB
+                        const kept = existingImages.value.filter(r => !toDelete.includes(r.no)).map(r => ({ no: r.no, url: r.url, isCover: r.no === finalNo }));
+                        const appended = uploaded.map(u => ({ no: u.no, url: u.url, isCover: u.no === finalNo }));
+                        existingImages.value = [...kept, ...appended];
+                        imageList.value.forEach(o => URL.revokeObjectURL(o.preview));
+                        imageList.value = [];
+                        deletedImageNos.value = [];
+                        coverSel.value = finalNo !== null ? { source: 'old', no: finalNo } : { source: 'new', index: 0 };
+                    } catch (imgErr) {
+                        console.warn('Shop image sync failed:', imgErr);
+                        imageWarning = 'ซิงค์รูปภาพไม่สำเร็จ: ' + (imgErr.message || '');
+                    }
+
+                    successMessage.value = imageWarning
+                        ? `อัปเดทข้อมูลร้านเรียบร้อยแล้ว! (ร้านกลับไปรอการอนุมัติใหม่) (แต่${imageWarning})`
+                        : 'อัปเดทข้อมูลร้านเรียบร้อยแล้ว! (ร้านกลับไปรอการอนุมัติใหม่)';
             };
 
             // *** สำคัญมาก: ต้อง return ตัวแปรเหล่านี้ออกไปให้ HTML ใช้ด้วย ***
@@ -502,14 +768,25 @@
                 phones,
                 addPhone,
                 removePhone,
+                normalizePhone,
                 errorMessage,
                 successMessage,
                 fieldErrors,
                 saveShopProfile,
                 handleFileUpload,
                 imageList,
-                coverIndex,
-                removeImage
+                coverSel,
+                isCoverNew,
+                isCoverOld,
+                keptOldImages,
+                existingImages,
+                deletedImageNos,
+                removeImage,
+                removeExistingImage,
+                editingShopId,
+                isLoadingShop,
+                isLoggedInOwner,
+                loadMyShop
             }
         }
     }).mount('#app');
