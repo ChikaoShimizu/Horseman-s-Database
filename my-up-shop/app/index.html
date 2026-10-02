@@ -165,6 +165,30 @@
 
                     <!-- Shop List -->
                     <div>
+                        <!-- Banner สถานะ GPS: ระยะทางคำนวณจากตำแหน่งจริง ถ้าไม่ได้ตำแหน่งจะโชว์เป็น – ไม่ใช้ตัวเลขปลอม -->
+                        <div v-if="geoStatus !== 'granted'"
+                             class="mb-6 px-4 py-3 rounded-xl border flex items-start gap-3"
+                             :class="geoStatus === 'loading'
+                                 ? 'bg-gray-50 border-gray-200'
+                                 : 'bg-yellow-50 border-yellow-300'">
+                            <i class="fa-solid fa-location-crosshairs mt-1"
+                               :class="geoStatus === 'loading' ? 'text-gray-400 animate-pulse' : 'text-yellow-500'"></i>
+                            <div class="flex-1 text-sm">
+                                <p class="font-medium"
+                                   :class="geoStatus === 'loading' ? 'text-gray-600' : 'text-yellow-800'">
+                                    {{ geoMessage }}
+                                </p>
+                                <p v-if="geoStatus !== 'loading'" class="text-yellow-600 text-xs mt-1">
+                                    ระบบจะแสดงระยะทางจริงให้เมื่อได้รับสิทธิ์เข้าถึงตำแหน่ง
+                                </p>
+                            </div>
+                            <button v-if="geoStatus !== 'loading'"
+                                    @click="requestLocation"
+                                    class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold bg-yellow-500 hover:bg-yellow-600 text-white transition-colors">
+                                ลองใหม่
+                            </button>
+                        </div>
+
                         <div class="flex justify-between items-end mb-6">
                             <h2 class="text-2xl font-bold text-gray-800">
                                 {{ searchCategory ? `ร้านในหมวด "${searchCategory}"` : 'ร้านยอดนิยม 🔥' }}
@@ -214,7 +238,9 @@
                                     </div>
                                     <div class="flex items-center text-sm text-gray-500">
                                         <i class="fa-solid fa-location-dot w-5 text-center mr-1 text-red-400"></i>
-                                        <span class="truncate">{{ shop.distance }} จากหน้ามอ</span>
+                                        <span v-if="hasShopCoords(shop) && userLocation" class="truncate">{{ getDistanceText(shop) }} จากคุณ</span>
+                                        <span v-else-if="hasShopCoords(shop)" class="truncate text-gray-400">{{ shortGeoLabel() }}</span>
+                                        <span v-else class="truncate text-gray-400">ไม่ทราบพิกัดร้าน</span>
                                     </div>
                                 </div>
                             </div>
@@ -288,13 +314,23 @@
                                     <p class="text-gray-600 leading-relaxed">{{ selectedShop.description }}</p>
                                 </div>
                                 
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
                                         <div class="flex items-start text-gray-700 mb-2">
                                             <i class="fa-regular fa-clock mt-1 mr-3 text-upPurple"></i>
                                             <div>
                                                 <div class="font-bold">เวลาเปิด-ปิด</div>
                                                 <div class="text-gray-600">{{ selectedShop.openTime }} - {{ selectedShop.closeTime }} น.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                        <div class="flex items-start text-gray-700">
+                                            <i class="fa-solid fa-route mt-1 mr-3 text-red-500"></i>
+                                            <div>
+                                                <div class="font-bold">ระยะทางจากคุณ</div>
+                                                <div v-if="hasShopCoords(selectedShop) && userLocation" class="text-gray-600 font-medium">{{ getDistanceText(selectedShop) }}</div>
+                                                <div v-else class="text-gray-400">{{ getMessage(selectedShop) }}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -444,10 +480,30 @@
                                         </div>
                                     </div>
                                     <div class="p-4">
-                                        <p class="text-sm text-gray-600 mb-3"><i class="fa-solid fa-thumbtack text-gray-400 mr-2"></i> พิกัด: {{ selectedShop.lat }}, {{ selectedShop.lng }}</p>
-                                        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition flex justify-center items-center">
+                                        <!-- ระยะทางจริงจาก GPS ผู้ใช้ (ไม่โชว์พิกัดดิบ) -->
+                                        <div class="bg-white rounded-lg border border-gray-200 p-3 mb-3">
+                                            <div class="flex items-center gap-2">
+                                                <i class="fa-solid fa-location-crosshairs text-upPurple"></i>
+                                                <span class="text-xs text-gray-500">ตำแหน่งของคุณ</span>
+                                            </div>
+                                            <div v-if="hasShopCoords(selectedShop) && userLocation" class="text-xl font-bold text-upPurple mt-1">
+                                                {{ getDistanceText(selectedShop) }}
+                                                <span v-if="geoStatus === 'loading'" class="block text-xs font-normal text-gray-400">
+                                                    <i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังอัปเดตตำแหน่ง...
+                                                </span>
+                                            </div>
+                                            <div v-else-if="geoStatus === 'loading'" class="text-sm text-gray-400 mt-1">
+                                                <i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังหาตำแหน่ง...
+                                            </div>
+                                            <div v-else class="text-sm text-gray-400 mt-1">{{ getMessage(selectedShop) }}</div>
+                                        </div>
+                                        <a v-if="directionsUrl(selectedShop)" :href="directionsUrl(selectedShop)" target="_blank" rel="noopener noreferrer"
+                                           class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition flex justify-center items-center">
                                             <i class="fa-solid fa-location-arrow mr-2"></i> นำทาง (Google Maps)
-                                        </button>
+                                        </a>
+                                        <div v-else class="w-full bg-gray-300 text-white font-bold py-2 px-4 rounded-lg text-center text-sm">
+                                            ร้านนี้ยังไม่มีพิกัด นำทางไม่ได้
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -591,8 +647,6 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             const shops = ref([]);
             const isLoading = ref(true);
 
-            // จุดอ้างอิง "หน้ามอ" สำหรับคำนวณระยะทางชั่วคราว (ข้อ 10 จะเปลี่ยนเป็น GPS ผู้ใช้จริง)
-            const UNI_LAT = 19.0284, UNI_LNG = 99.8941;
             const FALLBACK_IMG = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80';
             const haversineM = (lat1, lng1, lat2, lng2) => {
                 const R = 6371000, toRad = (d) => d * Math.PI / 180;
@@ -606,6 +660,179 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
                 return { lat: Number.isFinite(lat) ? lat : null, lng: Number.isFinite(lng) ? lng : null };
             };
+
+            // ===== ระบบระยะทาง: ใช้ GPS ของผู้ใช้จริง (ไม่มี fallback เป็นพิกัดหน้ามอ) =====
+            const GEO_LABEL = {
+                'idle': 'ยังไม่ได้ตรวจสอบตำแหน่ง',
+                'loading': 'กำลังขอสิทธิ์เข้าถึงตำแหน่งของคุณ',
+                'granted': 'ระบุตำแหน่งพร้อมใช้งานแล้ว',
+                'denied': 'ไม่สามารถเข้าถึงตำแหน่งได้ กรุณาเปิดสิทธิ์ Location ในเบราว์เซอร์ แล้วกด "ลองใหม่"',
+                'unavailable': 'เบราว์เซอร์ไม่รองรับการระบุตำแหน่ง',
+                'insecure': 'ต้องเปิดผ่าน HTTPS จึงจะใช้ GPS ได้'
+            };
+
+            const GEO_STORAGE_KEY = 'up_user_location';
+            const GEO_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // ตำแหน่งเมื่อวานยังดีกว่าไม่มีเลย
+
+            const userLocation = ref(null);
+            // เริ่มที่ 'loading' เพราะ onMounted สั่งขอสิทธิ์ทันที ถ้าเริ่มเป็น 'idle' banner จะโผล่เปล่า ๆ ก่อนข้อความเข้ามา
+            const geoStatus = ref('loading');
+            const geoMessage = ref(GEO_LABEL.loading);
+
+            // ตำแหน่งรอบก่อนจาก cache — เอามาโชว์ทันทีระหว่างรอ GPS รอบใหม่ จะได้ไม่หมุนค้าง / ไม่กระพริบ
+            const restoreCachedLocation = () => {
+                try {
+                    const raw = localStorage.getItem(GEO_STORAGE_KEY);
+                    if (!raw) return false;
+                    const cached = JSON.parse(raw);
+                    if (!Number.isFinite(cached?.lat) || !Number.isFinite(cached?.lng)) return false;
+                    if (cached.lat < -90 || cached.lat > 90 || cached.lng < -180 || cached.lng > 180) return false;
+                    if (cached.t && Date.now() - cached.t > GEO_CACHE_MAX_AGE) return false;
+                    userLocation.value = { lat: cached.lat, lng: cached.lng };
+                    return true;
+                } catch {
+                    return false;
+                }
+            };
+
+            const saveCachedLocation = (lat, lng) => {
+                try {
+                    localStorage.setItem(GEO_STORAGE_KEY, JSON.stringify({ lat, lng, t: Date.now() }));
+                } catch {
+                    // private mode / พื้นที่เต็ม — ข้ามไป ใช้แค่รอบนี้
+                }
+            };
+
+            if (restoreCachedLocation()) {
+                geoStatus.value = 'granted';
+                geoMessage.value = GEO_LABEL.granted;
+            }
+
+            const geoErrorText = (code) => {
+                if (code === 1) return GEO_LABEL.denied;
+                if (code === 2) return 'ไม่พบสัญญาณ GPS ของอุปกรณ์ กรุณาลองใหม่อีกครั้ง';
+                if (code === 3) return 'ขอตำแหน่งไม่สำเร็จ เวลาเชื่อมต่อหมด กรุณาลองใหม่อีกครั้ง';
+                return GEO_LABEL.denied;
+            };
+
+            // ดึงพิกัดของร้านจาก shop object ได้ทั้งร้านจาก seed (lat/lng) และจาก DB (ShopLocation)
+            const shopCoords = (shop) => {
+                const { lat, lng } = parseLocation(shop?.ShopLocation);
+                const sLat = lat !== null ? lat : parseFloat(shop?.lat);
+                const sLng = lng !== null ? lng : parseFloat(shop?.lng);
+                if (!Number.isFinite(sLat) || !Number.isFinite(sLng)) return null;
+                return { lat: sLat, lng: sLng };
+            };
+
+            // คำนวณระยะทางใหม่ทั้งหมดหลังได้พิกัดผู้ใช้ (ครอบคลุมทั้งร้าน seed และร้านจาก DB)
+            const recalcDistances = () => {
+                const me = userLocation.value;
+                shops.value.forEach(s => {
+                    const c = shopCoords(s);
+                    if (!c) { s.distance = '–'; return; }
+                    s.distance = me ? formatDistance(haversineM(me.lat, me.lng, c.lat, c.lng)) : '–';
+                });
+            };
+
+            // ร้านนี้มีพิกัดที่ใช้คำนวณได้จริงไหม (ต้องแยก "ร้านไม่มีพิกัด" ออกจาก "ยังไม่รู้ตำแหน่งผู้ใช้")
+            const hasShopCoords = (shop) => shopCoords(shop) !== null;
+
+            // ข้อความระยะทางของร้านเดียว ใช้ทั้งการ์ดหน้า Home และหน้ารายละเอียด
+            const getDistanceText = (shop) => {
+                if (!hasShopCoords(shop)) return '–';
+                if (!userLocation.value) return '–';
+                return shop.distance || '–';
+            };
+
+            // คำอธิบายว่าทำไมถึงไม่มีตัวเลขระยะทาง (ใช้ตอนสถานะ != granted หรือร้านไม่มีพิกัด)
+            const getMessage = (shop) => {
+                if (!hasShopCoords(shop)) return 'ร้านนี้ยังไม่มีพิกัด';
+                if (geoStatus.value === 'loading') return 'กำลังหาตำแหน่งคุณ...';
+                return geoMessage.value;
+            };
+
+            // ข้อความสั้นสำหรับการ์ดร้าน (ที่มีพิกัดแต่ยังคำนวณไม่ได้) ก้นความยาวจนตัดบรรทัด
+            const shortGeoLabel = () => {
+                if (geoStatus.value === 'loading') return 'กำลังหาตำแหน่ง...';
+                if (geoStatus.value === 'granted') return '–';
+                return 'กดเปิดสิทธิ์ตำแหน่งเพื่อดูระยะทาง';
+            };
+
+            // ลิงก์นำทาง Google Maps จากพิกัดร้าน (ไม่ต้องใช้ API key)
+            const directionsUrl = (shop) => {
+                const c = shopCoords(shop);
+                if (!c) return null;
+                return `https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}`;
+            };
+
+            let geoInFlight = false;
+            const requestLocation = () => {
+                if (geoInFlight) return;
+                // ไม่มีของเก่าเลยถึงโชว์ error — ถ้ามี cache อยู่แล้วให้ใช้ต่อเงียบ ๆ ไม่กระพริบ banner
+                const failSilent = () => { recalcDistances(); };
+                if (!('geolocation' in navigator)) {
+                    if (userLocation.value) { failSilent(); return; }
+                    geoStatus.value = 'unavailable';
+                    geoMessage.value = GEO_LABEL.unavailable;
+                    recalcDistances();
+                    return;
+                }
+                if (window.isSecureContext === false) {
+                    if (userLocation.value) { failSilent(); return; }
+                    geoStatus.value = 'insecure';
+                    geoMessage.value = GEO_LABEL.insecure;
+                    recalcDistances();
+                    return;
+                }
+                geoInFlight = true;
+                // มีตำแหน่งเก่าแล้ว = รีเฟรชเงียบ ไม่ตีกลับเป็น loading ให้จอกระพริบ
+                if (!userLocation.value) {
+                    geoStatus.value = 'loading';
+                    geoMessage.value = GEO_LABEL.loading;
+                }
+                const onSuccess = (pos) => {
+                    geoInFlight = false;
+                    const lat = pos?.coords?.latitude, lng = pos?.coords?.longitude;
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                        onError({ code: 2 });
+                        return;
+                    }
+                    userLocation.value = { lat, lng };
+                    saveCachedLocation(lat, lng);
+                    geoStatus.value = 'granted';
+                    geoMessage.value = GEO_LABEL.granted;
+                    recalcDistances();
+                };
+                const onError = (err) => {
+                    geoInFlight = false;
+                    if (userLocation.value) { failSilent(); return; }
+                    userLocation.value = null;
+                    geoStatus.value = err?.code === 1 ? 'denied' : 'unavailable';
+                    geoMessage.value = geoErrorText(err?.code);
+                    recalcDistances();
+                };
+                // รอบสองแบบหยาบ (ประหยัดแบต/ทะลุในอาคารได้ดีกว่า) ใช้เฉพาะตอน timeout หรือหาสัญญาณไม่เจอ
+                // ส่วน denied (code 1) ไม่ลองซ้ำ — ถามซ้ำมีแต่กวนผู้ใช้
+                const tryLowAccuracy = () => {
+                    try {
+                        navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+                    } catch {
+                        onError({ code: 2 });
+                    }
+                };
+                try {
+                    navigator.geolocation.getCurrentPosition(
+                        onSuccess,
+                        (err) => {
+                            if (err?.code === 3 || err?.code === 2) tryLowAccuracy();
+                            else onError(err);
+                        },
+                        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+                    );
+                } catch {
+                    onError({ code: 2 });
+                }
+            };
             const parseOperatingNote = (note) => {
                 const m = String(note || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
                 return m ? [m[1], m[2]] : ['', ''];
@@ -614,8 +841,6 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             const normalizeDbShop = (r, catNameById, coverMap) => {
                 const { lat, lng } = parseLocation(r.ShopLocation);
                 const [openTime, closeTime] = parseOperatingNote(r.ShopOperatingNote);
-                let distance = '–';
-                if (lat !== null && lng !== null) distance = formatDistance(haversineM(UNI_LAT, UNI_LNG, lat, lng));
                 return {
                     id: r.ShopID, ShopID: r.ShopID,
                     name: r.ShopName || '(ไม่มีชื่อร้าน)',
@@ -625,7 +850,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     isOpen: r.ShopManualStatus ?? true,
                     openTime, closeTime,
                     priceRange: r.ShopAvgPrice != null ? `฿${r.ShopAvgPrice}` : '–',
-                    distance, lat: lat ?? '', lng: lng ?? '',
+                    distance: '–', lat: lat ?? '', lng: lng ?? '',
                     rating: 0, reviews: [], approvalStatus: 'Approved'
                 };
             };
@@ -638,6 +863,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     const data = await response.json();
                     shops.value = data.shops;
                     categories.value = data.categories;
+                    recalcDistances();
                     // AC3: ผูกสถานะอนุมัติจาก DB เข้ากับ seed + เติมร้าน Approved ที่ไม่มีใน seed (เช่นร้านที่ owner เพิ่งสร้าง)
                     try {
                         const { data: dbShops, error: dbErr } = await supabaseClient
@@ -665,6 +891,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                         });
                         shops.value.forEach(s => { s.approvalStatus = statusMap[Number(s.id)] || 'Approved'; });
                         if (extras.length > 0) shops.value = shops.value.concat(extras);
+                        // ร้านจาก DB อาจเพิ่งเข้ามาใหม่ จึงต้องคำนวณระยะทางใหม่ทั้งรายการหลัง merge เสร็จ
+                        recalcDistances();
                     } catch (dbErr) {
                         console.warn('Load shop approval statuses failed, showing seeds only:', dbErr);
                     }
@@ -775,6 +1003,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             onMounted(() => {
                 loadData();
                 resolveUser();
+                // ขอ GPS แบบไม่ block การโหลดร้าน — ผู้ใช้ต้องเห็นร้านทันที ตำแหน่งค่อยทยอยมา
+                requestLocation();
             });
 
             onUnmounted(() => {
@@ -1214,6 +1444,16 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 viewShopDetail,
                 loadShopReviews,
                 formatRating,
+                userLocation,
+                geoStatus,
+                geoMessage,
+                recalcDistances,
+                hasShopCoords,
+                getDistanceText,
+                getMessage,
+                shortGeoLabel,
+                directionsUrl,
+                requestLocation,
                 toggleLogin,
                 logout,
                 setRating,
