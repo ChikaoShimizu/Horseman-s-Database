@@ -21,7 +21,7 @@
     {
       "id": 2,
       "name": "Wash & Go ซักอบรีด",
-      "category": "ซักรีด",
+      "category": "บริการ",
       "rating": 4.8,
       "isOpen": true,
       "openTime": "08:00",
@@ -72,7 +72,7 @@
   "categories": [
     { "id": 1, "name": "อาหาร", "icon": "fa-solid fa-utensils" },
     { "id": 2, "name": "คาเฟ่", "icon": "fa-solid fa-mug-hot" },
-    { "id": 3, "name": "ซักรีด", "icon": "fa-solid fa-tshirt" },
+    { "id": 3, "name": "ร้านค้า", "icon": "fa-solid fa-bag-shopping" },
     { "id": 4, "name": "หอพัก", "icon": "fa-solid fa-building" },
     { "id": 5, "name": "บริการ", "icon": "fa-solid fa-wrench" }
   ]
