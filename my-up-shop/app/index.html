@@ -1266,11 +1266,13 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             };
 
             // แปลง email (Supabase Auth) เป็น UserID ตัวเลข (ตาราง User) สำหรับคอลัมน์ Review.ReviewUser
+            // normalize เป็นตัวเล็กก่อนเทียบ (กันแถวเก่าที่สมัครด้วยตัวใหญ่)
             const resolveDbUserId = async (email) => {
+                const key = String(email || '').trim().toLowerCase();
                 const { data, error } = await supabaseClient
                     .from('User')
                     .select('UserID')
-                    .eq('UserEmail', email)
+                    .eq('UserEmail', key)
                     .limit(1);
                 if (error) throw error;
                 if (!data || data.length === 0) return null;

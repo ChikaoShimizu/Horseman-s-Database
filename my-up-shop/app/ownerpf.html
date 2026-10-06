@@ -471,7 +471,7 @@
                 isLoadingShop.value = true;
                 try {
                     const { data: userData } = await supabaseClient.auth.getUser();
-                    const email = userData?.user?.email || localStorage.getItem('userEmail');
+                    const email = String(userData?.user?.email || localStorage.getItem('userEmail') || '').trim().toLowerCase();
                     if (!email) { isLoggedInOwner.value = false; return; }
                     isLoggedInOwner.value = true;
                     const { data: users, error: uErr } = await supabaseClient
@@ -736,7 +736,7 @@
                     try {
                         if (newShopId !== null) {
                             const { data: userData } = await supabaseClient.auth.getUser();
-                            const email = userData?.user?.email || localStorage.getItem('userEmail');
+                            const email = String(userData?.user?.email || localStorage.getItem('userEmail') || '').trim().toLowerCase();
                             if (!email) {
                                 linkWarning = 'ไม่พบอีเมลผู้ใช้ เลยผูกเจ้าของร้านไม่ได้';
                             } else {
