@@ -355,6 +355,18 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                        <div class="flex items-start text-gray-700">
+                                            <i class="fa-solid fa-phone mt-1 mr-3 text-upPurple"></i>
+                                            <div>
+                                                <div class="font-bold">เบอร์โทรศัพท์</div>
+                                                <div v-if="shopPhones.length > 0" class="text-gray-600 space-y-1">
+                                                    <div v-for="(phone, idx) in shopPhones" :key="idx">{{ phone }}</div>
+                                                </div>
+                                                <div v-else class="text-gray-400">–</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- ตารางเวลาเปิด-ปิดรายสัปดาห์ (โชว์เฉพาะร้านที่มีข้อมูลรายวัน) -->
@@ -655,6 +667,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
             const openReplyId = ref(null);
             const submittingReplyId = ref(null);
             const shopImages = ref([]);
+            const shopPhones = ref([]);
             const activeImageIndex = ref(0);
             const lightboxOpen = ref(false);
             const toast = reactive({ show: false, type: 'info', message: '' });
@@ -1202,12 +1215,34 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 Object.keys(replyDrafts).forEach(k => { delete replyDrafts[k]; });
                 shopImages.value = [];
                 activeImageIndex.value = 0;
+                shopPhones.value = [];
                 closeLightbox();
                 currentView.value = 'detail';
                 window.scrollTo(0, 0);
                 await loadShopReviews();
                 if (mySeq !== routeSeq) return; // ผู้ใช้กด Back/Forward ไปหน้าอื่นแล้ว ทิ้งผลลัพธ์ค้าง
                 await loadShopImages();
+                if (mySeq !== routeSeq) return;
+                await loadShopPhones();
+            };
+
+            // เบอร์โทรของร้านจากตาราง ShopPhoneNumber (text ธรรมดา ไม่ใช่ลิงก์)
+            const loadShopPhones = async () => {
+                const shop = selectedShop.value;
+                shopPhones.value = [];
+                if (!shop) return;
+                const shopId = getShopId(shop);
+                if (shopId === null) return;
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('ShopPhoneNumber')
+                        .select('ShopPhoneNumber')
+                        .eq('ShopID', shopId);
+                    if (error) throw error;
+                    shopPhones.value = (data || []).map(r => r.ShopPhoneNumber).filter(p => p);
+                } catch (err) {
+                    console.warn('Load shop phones failed:', err);
+                }
             };
 
             const applyRoute = async () => {
@@ -1644,6 +1679,8 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 toggleReplyBox,
                 submitReply,
                 shopImages,
+                shopPhones,
+                loadShopPhones,
                 activeImageIndex,
                 activeImage,
                 lightboxOpen,
