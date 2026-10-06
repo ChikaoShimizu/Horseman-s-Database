@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# UP Shops - runtime config มี key จริง ห้าม commit (ใช้ config.example.js แทน)
+app/config.js
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
