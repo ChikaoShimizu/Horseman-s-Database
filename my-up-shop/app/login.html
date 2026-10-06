@@ -100,7 +100,7 @@ createApp({
                 // กรณีเข้าสู่ระบบสำเร็จ
                 if (data.user) {
                     localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('userEmail', data.user.email);
+                    localStorage.setItem('userEmail', String(data.user.email || '').trim().toLowerCase());
                     
                     const userRole = data.user.user_metadata?.role || 'user';
                     localStorage.setItem('userRole', userRole);

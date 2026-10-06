@@ -126,6 +126,10 @@
                     return;
                 }
 
+                // normalize อีเมลให้เป็นตัวเล็กทั้งหมดตั้งแต่ต้น (Supabase Auth เก็บตัวเล็ก — กันเคสสมัครตัวใหญ่แล้ว login หาไม่เจอ)
+                const email = String(form.email).trim().toLowerCase();
+                form.email = email;
+
                 // 2. เช็ครหัสผ่านและการยืนยันรหัสผ่านตรงกันไหม
                 if (form.password !== form.confirmPassword) {
                     errorMessage.value = 'รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน';
@@ -137,7 +141,7 @@
                     const { data: existingUsers, error: checkError } = await supabaseClient
                         .from('User')
                         .select('UserEmail')
-                        .eq('UserEmail', form.email); // ค้นหาว่ามีอีเมลนี้ในคอลัมน์ UserEmail หรือไม่
+                        .eq('UserEmail', email); // ค้นหาว่ามีอีเมลนี้ในคอลัมน์ UserEmail หรือไม่
 
                     if (checkError) {
                         console.error('Error checking email:', checkError);
@@ -157,7 +161,7 @@
 
                     // 4. ใช้ระบบ Auth ของ Supabase (สร้างบัญชี)
                     const { data: authData, error: authError } = await supabaseClient.auth.signUp({
-                        email: form.email,
+                        email: email,
                         password: form.password, 
                         options: {
                             data: { role: role.value, name: form.name }
@@ -174,7 +178,7 @@
                     // 6. บันทึกลงตาราง User พร้อมรหัสที่ผ่านการ Hashing แล้ว
                     if (authData.user) {
                         const { error: insertError } = await supabaseClient.from('User').insert([{
-                            UserEmail: form.email,
+                            UserEmail: email,
                             Username: form.name,
                             UserPassword: encryptedPassword,
                             role: role.value
