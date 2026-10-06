@@ -1147,31 +1147,47 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     isAuthLoading.value = false;
                 });
 
-            onMounted(() => {
-                loadData();
+            onMounted(async () => {
+                const dataPromise = loadData();
                 resolveUser();
                 // ขอ GPS แบบไม่ block การโหลดร้าน — ผู้ใช้ต้องเห็นร้านทันที ตำแหน่งค่อยทยอยมา
                 requestLocation();
                 // รีเฟรชป้ายเปิด/ปิดทุก 60 วิให้เรียลไทม์ (AC2 ข้อ 8)
+                // Hash Routing: รอร้านโหลดเสร็จก่อนค่อยอ่าน hash (deep link #/shop/<id> ถึงจะหา id เจอ)
+                await dataPromise;
+                applyRoute();
+                window.addEventListener('hashchange', applyRoute);
                 openTimer = setInterval(refreshOpenStatus, 60000);
             });
 
             onUnmounted(() => {
+                window.removeEventListener('hashchange', applyRoute);
                 authListener?.subscription?.unsubscribe();
                 if (openTimer) clearInterval(openTimer);
             });
 
-            const navigate = (view) => {
-                currentView.value = view;
-                window.scrollTo(0,0);
+            // ===== Hash Routing: #/ = Home, #/shop/<id> = หน้าร้าน, #/admin = หลังบ้าน =====
+            // hashchange -> applyRoute เป็น single source of truth ในการเปลี่ยน view
+            // ไม่ดัก/บล็อกปุ่ม Back: Back/Forward ใช้ของเบราว์เซอร์ล้วน
+            let routeSeq = 0;
+
+            const parseHash = () => {
+                const hash = window.location.hash || '#/';
+                const shopMatch = hash.match(/^#\/shop\/([A-Za-z0-9_-]+)\/?$/);
+                if (shopMatch) return { name: 'shop', id: shopMatch[1] };
+                if (hash === '#/admin' || hash === '#/admin/') return { name: 'admin' };
+                return { name: 'home' };
             };
 
-            const selectCategory = (catName) => {
-                searchCategory.value = catName;
-                searchQuery.value = '';
-            };
-
-            const viewShopDetail = async (shop) => {
+            // เปิดหน้าร้านด้วย id: flow เดียวกับ viewShopDetail เดิม (รีเซ็ตฟอร์ม/โหลดรีวิว/โหลดรูป)
+            const openShopById = async (id) => {
+                const mySeq = ++routeSeq;
+                const shop = shops.value.find(s => String(getShopId(s)) === String(id));
+                if (!shop) {
+                    showToast('error', 'ไม่พบร้านค้านี้ในระบบ');
+                    window.location.replace('#/');
+                    return;
+                }
                 selectedShop.value = shop;
                 if (!Array.isArray(selectedShop.value.reviews)) selectedShop.value.reviews = [];
                 if (typeof selectedShop.value.rating !== 'number' || !Number.isFinite(selectedShop.value.rating)) selectedShop.value.rating = 0;
@@ -1182,9 +1198,59 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 shopImages.value = [];
                 activeImageIndex.value = 0;
                 closeLightbox();
-                navigate('detail');
+                currentView.value = 'detail';
+                window.scrollTo(0, 0);
                 await loadShopReviews();
+                if (mySeq !== routeSeq) return; // ผู้ใช้กด Back/Forward ไปหน้าอื่นแล้ว ทิ้งผลลัพธ์ค้าง
                 await loadShopImages();
+            };
+
+            const applyRoute = async () => {
+                const route = parseHash();
+                if (route.name === 'shop') {
+                    await openShopById(route.id);
+                    return;
+                }
+                routeSeq++; // ยกเลิกงานโหลดร้านค้างอยู่ กัน race ตอน Back/Forward รัวๆ
+                if (route.name === 'admin') {
+                    currentView.value = 'admin';
+                } else {
+                    if (!window.location.hash || window.location.hash === '#') {
+                        history.replaceState(null, '', '#/');
+                    }
+                    currentView.value = 'home';
+                }
+                window.scrollTo(0, 0);
+            };
+
+            // navigate เขียนแค่ location.hash ที่เหลือให้ hashchange -> applyRoute ทำ
+            const navigate = (view) => {
+                const target = view === 'admin' ? '#/admin' : '#/';
+                if (window.location.hash !== target) {
+                    window.location.hash = target;
+                } else {
+                    applyRoute();
+                }
+            };
+
+            const selectCategory = (catName) => {
+                searchCategory.value = catName;
+                searchQuery.value = '';
+            };
+
+            const viewShopDetail = async (shop) => {
+                const shopId = getShopId(shop);
+                if (shopId === null) {
+                    showToast('error', 'ไม่พบรหัสร้านค้าในระบบ');
+                    return;
+                }
+                const target = '#/shop/' + shopId;
+                // เขียน hash อย่างเดียว ที่เหลือให้ hashchange -> applyRoute ทำ (รวมเคส hash ซ้ำกัน)
+                if (window.location.hash !== target) {
+                    window.location.hash = target;
+                } else {
+                    await openShopById(shopId);
+                }
             };
 
             // Gallery: รูปทั้งหมดของร้านจากตาราง Shop_Image (เรียงปกขึ้นก่อน) — ไม่มีแถวใช้รูปเดิม selectedShop.image
