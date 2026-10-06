@@ -731,14 +731,13 @@
                     }
 
                     // ผูกเจ้าของกับร้าน: อัปเดท UserShopID (FK) ในแถว User ของคนกดบันทึกเป็น ID ร้านที่เพิ่งสร้าง
-                    // ล้มเหลวไม่บล็อกการสร้างร้าน แต่ต้องแจ้งให้เห็น (ไม่ใช่แค่ warn ใน console)
-                    let linkWarning = '';
+                    // ล้มเหลวไม่บล็อกการสร้างร้าน เก็บรายละเอียดเทคนิคไว้แค่ console ไม่แสดงให้ผู้ใช้เห็น
                     try {
                         if (newShopId !== null) {
                             const { data: userData } = await supabaseClient.auth.getUser();
                             const email = String(userData?.user?.email || localStorage.getItem('userEmail') || '').trim().toLowerCase();
                             if (!email) {
-                                linkWarning = 'ไม่พบอีเมลผู้ใช้ เลยผูกเจ้าของร้านไม่ได้';
+                                console.warn('Link shop to owner skipped: owner email not found');
                             } else {
                                 // verify ว่า DB ผูกจริง (RLS ที่ไม่มี UPDATE จะสำเร็จหลอกโดยได้ 0 แถว)
                                 const { data: linked, error: linkError } = await supabaseClient
@@ -748,18 +747,16 @@
                                     .select('UserID');
                                 if (linkError) throw linkError;
                                 if (!linked || linked.length === 0) {
-                                    linkWarning = 'DB ไม่ได้ผูกเจ้าของ (0 แถว) — ตรวจ RLS UPDATE ของตาราง User';
+                                    console.warn('Link shop to owner returned 0 rows for shop', newShopId);
                                 }
                             }
                         }
                     } catch (linkErr) {
                         console.warn('Link shop to owner failed:', linkErr);
-                        linkWarning = 'ผูกเจ้าของร้านไม่สำเร็จ: ' + (linkErr.message || '');
                     }
 
                     // 3. รูป: รูปเดิมที่เหลือใช้ URL เดิมได้เลย (กรณีขอใหม่หลัง Rejected) + อัปโหลดรูปใหม่ แล้วบันทึกแถวลงตาราง Shop_Image
-                    // (ปกมีรูปเดียว: ตาม radio coverSel) — ล้มเหลวไม่บล็อก แต่ต้องแจ้งให้เห็น
-                    let imageWarning = '';
+                    // (ปกมีรูปเดียว: ตาม radio coverSel) — ล้มเหลวไม่บล็อก เก็บรายละเอียดไว้แค่ console
                     let createdRows = [];
                     if (newShopId !== null) {
                         try {
@@ -790,7 +787,6 @@
                             ];
                         } catch (imgErr) {
                             console.warn('Shop image upload failed:', imgErr);
-                            imageWarning = 'อัปโหลดรูปไม่สำเร็จ: ' + (imgErr.message || '');
                         }
                     }
 
@@ -805,10 +801,9 @@
                         coverSel.value = coverRow ? { source: 'old', no: coverRow.no } : { source: 'new', index: 0 };
                     }
 
-                    // แสดงกล่องข้อความสีเขียว (ถ้าผูกเจ้าของ/อัปโหลดรูปไม่สำเร็จให้บอกต่อท้ายด้วย)
-                    const warnings = [linkWarning, imageWarning].filter(w => w).map(w => `แต่${w}`).join(' ');
-                    const doneText = isResubmit ? 'ส่งคำขออนุมัติใหม่เรียบร้อยแล้ว!' : 'ข้อมูลร้านค้าเข้าสู่ระบบเรียบร้อยแล้ว!';
-                    successMessage.value = warnings ? `${doneText} (${warnings})` : doneText;
+                    // แสดงกล่องข้อความสีเขียวภาษาผู้ใช้ทั่วไป (รายละเอียดเทคนิคเก็บไว้แค่ console)
+                    const doneText = isResubmit ? 'ส่งคำขออนุมัติใหม่เรียบร้อยแล้ว กรุณารอแอดมินอนุมัติ' : 'บันทึกสำเร็จ กรุณารอแอดมินอนุมัติ';
+                    successMessage.value = doneText;
                     window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
@@ -849,7 +844,7 @@
                     await saveOperatingHours(editId);
 
                     // 3. รูปภาพ: ลบรูปที่ติ๊กไว้ (แถว + ไฟล์) + อัปโหลดรูปใหม่ต่อท้าย + จัดปกให้เหลือรูปเดียว
-                    let imageWarning = '';
+                    // ล้มเหลวไม่บล็อก เก็บรายละเอียดไว้แค่ console ไม่แสดงศัพท์เทคนิคให้ผู้ใช้เห็น
                     try {
                         const toDelete = [...deletedImageNos.value];
                         for (const no of toDelete) {
@@ -902,12 +897,9 @@
                         coverSel.value = finalNo !== null ? { source: 'old', no: finalNo } : { source: 'new', index: 0 };
                     } catch (imgErr) {
                         console.warn('Shop image sync failed:', imgErr);
-                        imageWarning = 'ซิงค์รูปภาพไม่สำเร็จ: ' + (imgErr.message || '');
                     }
 
-                    successMessage.value = imageWarning
-                        ? `อัปเดทข้อมูลร้านเรียบร้อยแล้ว! (แต่${imageWarning})`
-                        : 'อัปเดทข้อมูลร้านเรียบร้อยแล้ว!';
+                    successMessage.value = 'อัปเดทข้อมูลร้านเรียบร้อยแล้ว!';
                     window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
