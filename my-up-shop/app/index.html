@@ -987,10 +987,10 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                 try {
                     isLoading.value = true;
                     loadError.value = false;
-                    // หมวดจากตาราง Category (เลิกอ่าน data.json)
+                    // หมวดจากตาราง Category (อ่านแค่ id+name — ไม่แตะคอลัมน์ไอคอนที่เคยโดนลบจนพังทั้งหน้า)
                     const { data: catRows, error: catErr } = await supabaseClient
                         .from('Category')
-                        .select('CategoryId, CategoryName, CategoryIconURL')
+                        .select('CategoryId, CategoryName')
                         .order('CategoryId', { ascending: true });
                     if (catErr) throw catErr;
                     const FALLBACK_ICONS = { 1: 'fa-solid fa-utensils', 2: 'fa-solid fa-mug-hot', 3: 'fa-solid fa-bag-shopping', 4: 'fa-solid fa-building', 5: 'fa-solid fa-wrench' };
@@ -1004,7 +1004,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
                     categories.value = (catRows || []).map(c => ({
                         id: c.CategoryId,
                         name: c.CategoryName,
-                        icon: c.CategoryIconURL || FALLBACK_ICONS[Number(c.CategoryId)] || 'fa-solid fa-store'
+                        icon: FALLBACK_ICONS[Number(c.CategoryId)] || 'fa-solid fa-store'
                     }));
                     // กันแถบหมวดว่างถ้าตาราง Category ใน DB ไม่มีแถว (เคยเกิดมาแล้ว)
                     if (categories.value.length === 0) {
