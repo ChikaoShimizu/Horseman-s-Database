@@ -1,2 +1,34 @@
-# Horseman-s-Database
-# Chapter 93, 11:13PM , Create New Repository
+# UP Shops — ระบบแนะนำร้านค้ารอบมหาวิทยาลัยพะเยา
+Database System Project — กลุ่มอาชาบุรุษ สาขาวิศวกรรมซอฟต์แวร์ มหาวิทยาลัยพะเยา
+
+เว็บรวมร้านอาหาร คาเฟ่ หอพัก และบริการรอบมอ พร้อมรีวิว-ให้ดาว ตอบกลับจากร้าน แผนที่-นำทาง และระบบอนุมัติร้านโดยแอดมิน
+
+## การเข้าถึงหน้าต่างๆ
+- หน้าร้าน (ผู้ใช้ทั่วไป): `https://horsemenshopdictionary.vercel.app/app/index.html#/`
+- หลังบ้าน (แอดมินเท่านั้น): `https://horsemenshopdictionary.vercel.app/app/admin.html#/`
+  (ไม่มีปุ่มในเว็บ ต้องเข้าผ่านลิงก์ตรง + ต้องล็อกอิน role admin)
+- จัดการร้าน (เจ้าของร้าน): ปุ่ม "จัดการร้านค้า" หลังล็อกอินเป็น owner
+
+## ฟีเจอร์ 01 — สมัครสมาชิก / เข้าสู่ระบบ
+**วิธีใช้:** เปิด `Register.html` → เลือกบทบาท (นิสิต/ผู้ใช้ทั่วไป หรือเจ้าของร้าน) → กรอกชื่อ-อีเมล-รหัสผ่าน 2 รอบ → ยืนยัน → ไป `login.html` เข้าสู่ระบบ (กดรูปตาดูรหัสได้) → กลับหน้าแรกพร้อมชื่อผู้ใช้
+**ผูก Database:** `User(UserEmail, Username, UserPassword, role)` — อีเมลเก็บตัวเล็กทั้งหมด; รหัสจริงอยู่ Supabase Auth (bcrypt), `UserPassword` ในตารางเป็น legacy
+
+## ฟีเจอร์ 02 — จัดการข้อมูลร้านค้า (เจ้าของร้าน)
+**วิธีใช้:** ล็อกอิน owner → **จัดการร้านค้า** (`ownerpf.html`) — ไม่มีร้านได้ฟอร์มเปล่า (โหมดสร้าง) / มีร้านแล้วโหลดของเดิมมาแก้ (โหมดแก้ไข) → กรอกชื่อ-หมวด-คำอธิบาย-ราคาประมาณ-เบอร์โทรศัพท์ (เพิ่ม/ลบได้)-รูปภาพ (1–10 รูป เลือกปกได้รูปเดียว ลบรูปเก่าได้)-เวลาเปิด-ปิดรายวัน 7 วัน (วันละสูงสุด 2 กะ ข้ามคืนได้)-ปักหมุดแผนที่-สวิตช์ปิดร้านชั่วคราว → กดบันทึก (สร้างใหม่รอตรวจ / แก้ไขมีผลทันที / ร้านที่ถูกปฏิเสธบันทึกเป็นคำขอใหม่แถวใหม่ แถวเก่าคงเป็นประวัติ)
+**ผูก Database:** `Shop(ShopName, ShopDescription, ShopCategoryId → Category, ShopAvgPrice, ShopLocation, ShopManualStatus, ShopOperatingNote, ShopApprovalStatus, ShopCreatedAt)` + `ShopPhoneNumber(ShopID, ShopPhoneNumber)` + `Shop_Image(ShopID, ShopImageNo, ShopImageURL, ShopIsCover ปกเดียว)` (+ไฟล์ใน bucket `shop-images`) + `Operating_Hours(ShopID, DayOfWeek 1–7, ShiftNo, OpenTime, CloseTime)` + ผูกเจ้าของ `User.UserShopID → Shop.ShopID`
+
+## ฟีเจอร์ 03 — ค้นหา/กรองร้าน (ผู้ใช้ทั่วไป)
+**วิธีใช้:** หน้าแรกพิมพ์ชื่อ/หมวด (ไม่สนตัวพิมพ์เล็ก-ใหญ่) → กดชิป 5 หมวด (อาหาร/คาเฟ่/ร้านค้า/หอพัก/บริการ) → ติ๊ก **เปิดอยู่ (Open Now)** → อนุญาต GPS เพื่อเห็นระยะจริง (ปฏิเสธมีป้าย + ปุ่มลองใหม่) → ป้ายเปิด/ปิดขยับเองทุกนาที
+**ผูก Database:** อ่าน `Shop` (เฉพาะที่ `Approved`) + `Category(CategoryName)` + `Operating_Hours` (เทียบเวลาเครื่อง ได้ป้ายเปิด/ปิด) + `Review` (เฉลี่ยดาว) — หน้านี้ไม่เขียนอะไรเพิ่ม
+
+## ฟีเจอร์ 04 — รีวิวและตอบกลับ
+**วิธีใช้:** เปิดหน้าร้าน (`#/shop/<id>` แชร์ลิงก์/รีเฟรชได้ไม่หลุด) → ให้ดาว + เขียนคอมเมนต์ (ต้อง login, กันกดส่งซ้ำ) → เจ้าของร้านเห็นปุ่ม **ตอบกลับ/แก้ไขคำตอบ** ใต้รีวิวร้านตัวเองเท่านั้น → คำตอบโชว์ใต้รีวิวทันที
+**ผูก Database:** เขียน `Review(ReviewShop, ReviewUser → User.UserID, ReviewRating, ReviewComment)` + อ่านชื่อผ่าน `User.Username` / ตอบกลับเขียน `Review_Replies(ReviewID, ReplyNo ต่อเลข, UserID, ReplyText)` โชว์แถว `ReplyNo` สูงสุด
+
+## ฟีเจอร์ 05 — นำทาง
+**วิธีใช้:** หน้าร้านดูแผนที่ + พิกัด lat,lng → กด **นำทาง (Google Maps)** เปิดพิกัดร้านได้ทันที / ระยะ "ห่างจากคุณ" คำนวณจาก GPS (ไม่ให้สิทธิ์ใช้จุดหน้ามอแทน)
+**ผูก Database:** อ่าน `Shop.ShopLocation ("lat,lng")` อย่างเดียว (คำนวณ Haversine ฝั่งหน้าเว็บ ไม่เก็บระยะลง DB)
+
+## ฟีเจอร์ 06 — อนุมัติร้านค้า (แอดมิน)
+**วิธีใช้:** เปิด `admin.html` ผ่านลิงก์ตรง (role admin) → ตารางรออนุมัติ (ชื่อร้าน/หมวด/คนขอ/วันที่ขอ) → **อนุมัติ** (ขึ้น Home) / **ปฏิเสธ** (คงแถวไว้เป็นประวัติ ไม่ขึ้น Home) — ทุกปุ่มมี confirm + ตรวจว่าลง DB จริง (กันสำเร็จหลอก)
+**ผูก Database:** อ่าน `Shop (where ShopApprovalStatus = 'Pending')` + ชื่อหมวดจาก `Category` + ชื่อคนขอผ่าน `User(UserShopID)` / เขียน `Shop.ShopApprovalStatus → Approved/Rejected` + นับจำนวน `Shop`/`User` ในการ์ดสถิติ
